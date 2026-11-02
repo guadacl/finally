@@ -1,0 +1,90 @@
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { RouterLink, RouterLinkActive } from '@angular/router';
+import { PortfolioService } from '../core/portfolio.service';
+import { PriceStreamService } from '../core/price-stream.service';
+import { MoneyPipe, signClass } from '../shared/format';
+import { PriceFlashDirective } from '../shared/price-flash.directive';
+
+@Component({
+  selector: 'app-header',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [RouterLink, RouterLinkActive, MoneyPipe, PriceFlashDirective],
+  template: `
+    <header class="flex h-12 items-center gap-6 border-b border-edge bg-panel-2 px-4">
+      <a routerLink="/markets" class="flex items-center gap-2 select-none">
+        <span class="flex h-7 w-7 items-center justify-center rounded bg-accent text-sm font-black text-bg">F</span>
+        <span class="text-base font-bold tracking-tight">Fin<span class="text-accent">Ally</span></span>
+        <span class="hidden text-[10px] tracking-widest text-muted uppercase lg:inline">AI Trading Workstation</span>
+      </a>
+
+      <nav class="flex h-full items-stretch gap-1">
+        @for (item of nav; track item.path) {
+          <a
+            [routerLink]="item.path"
+            routerLinkActive="!text-fg !border-accent"
+            [attr.data-testid]="'nav-' + item.id"
+            class="flex items-center border-b-2 border-transparent px-3 text-xs font-semibold tracking-wider text-muted uppercase transition-colors hover:text-fg"
+            >{{ item.label }}</a
+          >
+        }
+      </nav>
+
+      <div class="ml-auto flex items-center gap-5">
+        <div class="flex flex-col items-end leading-tight">
+          <span class="text-[10px] tracking-widest text-muted uppercase">Portfolio</span>
+          <span class="num rounded px-1 text-sm font-semibold" data-testid="header-total" [appPriceFlash]="total()">{{
+            total() | money
+          }}</span>
+        </div>
+        <div class="hidden flex-col items-end leading-tight sm:flex">
+          <span class="text-[10px] tracking-widest text-muted uppercase">Unrealized</span>
+          <span class="num text-sm" [class]="pnlClass()">{{ pnl() | money: true }}</span>
+        </div>
+        <div class="flex flex-col items-end leading-tight">
+          <span class="text-[10px] tracking-widest text-muted uppercase">Cash</span>
+          <span class="num text-sm" data-testid="header-cash">{{ cash() | money }}</span>
+        </div>
+        <div
+          class="flex items-center gap-1.5"
+          data-testid="connection-status"
+          [attr.data-status]="status()"
+          [attr.title]="'Price stream: ' + status()"
+        >
+          <span class="relative flex h-2.5 w-2.5">
+            @if (status() === 'connected') {
+              <span class="absolute inline-flex h-full w-full animate-ping rounded-full bg-up opacity-40"></span>
+            }
+            <span class="relative inline-flex h-2.5 w-2.5 rounded-full" [class]="dotClass()"></span>
+          </span>
+          <span class="hidden text-[10px] tracking-widest text-muted uppercase md:inline">{{ status() }}</span>
+        </div>
+      </div>
+    </header>
+  `,
+})
+export class HeaderComponent {
+  private readonly portfolio = inject(PortfolioService);
+  private readonly prices = inject(PriceStreamService);
+
+  readonly nav = [
+    { id: 'markets', path: '/markets', label: 'Markets' },
+    { id: 'watchlists', path: '/watchlists', label: 'Watchlists' },
+    { id: 'portfolio', path: '/portfolio', label: 'Portfolio' },
+  ];
+
+  readonly total = this.portfolio.total;
+  readonly cash = this.portfolio.cash;
+  readonly pnl = this.portfolio.unrealizedPnl;
+  readonly status = this.prices.status;
+  readonly pnlClass = computed(() => signClass(this.pnl()));
+  readonly dotClass = computed(() => {
+    switch (this.status()) {
+      case 'connected':
+        return 'bg-up';
+      case 'reconnecting':
+        return 'bg-accent';
+      default:
+        return 'bg-down';
+    }
+  });
+}

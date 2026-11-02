@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  xmlns:zeebe="http://camunda.org/schema/zeebe/1.0"
+                  xmlns:modeler="http://camunda.org/schema/modeler/1.0"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  id="Definitions_KanbanCard"
+                  targetNamespace="http://finallyapp.com/bpmn"
+                  exporter="FinAlly Camunda agent" exporterVersion="1.0"
+                  modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.8.0">
+
+  <!--
+    FinAlly kanban card lifecycle. One process instance per kanban card.
+    Variables: cardId (string, correlation key), ticker, column (SUPPORT|RESISTANCE), targetPrice (number), price (number).
+    Messages (correlation key = cardId): card-moved {column, targetPrice}, target-price-hit {price}, card-deleted.
+    Every notification is sent by a service task of job type "finally-notify"; the notification type is
+    given by the task header "notificationType".
+  -->
+
+  <bpmn:message id="Message_CardDeleted" name="card-deleted">
+    <bpmn:extensionElements>
+      <zeebe:subscription correlationKey="=cardId" />
+    </bpmn:extensionElements>
+  </bpmn:message>
+  <bpmn:message id="Message_TargetPriceHit" name="target-price-hit">
+    <bpmn:extensionElements>
+      <zeebe:subscription correlationKey="=cardId" />
+    </bpmn:extensionElements>
+  </bpmn:message>
+  <bpmn:message id="Message_CardMoved" name="card-moved">
+    <bpmn:extensionElements>
+      <zeebe:subscription correlationKey="=cardId" />
+    </bpmn:extensionElements>
+  </bpmn:message>
+
+  <bpmn:process id="kanban-card" name="FinAlly kanban card" isExecutable="true">
+
+    <bpmn:startEvent id="StartEvent_CardCreated" name="Card created">
+      <bpmn:outgoing>Flow_ToColumnGateway</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:exclusiveGateway id="Gateway_Column" name="Column?" default="Flow_Resistance">
+      <bpmn:incoming>Flow_ToColumnGateway</bpmn:incoming>
+      <bpmn:outgoing>Flow_Support</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Resistance</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:serviceTask id="Task_NotifyCreatedSupport" name="Notify: card created in Support">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="finally-notify" retries="3" />
+        <zeebe:taskHeaders>
+          <zeebe:header key="notificationType" value="CARD_CREATED" />
+        </zeebe:taskHeaders>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_Support</bpmn:incoming>
+      <bpmn:outgoing>Flow_SupportToMerge</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_NotifyCreatedResistance" name="Notify: card created in Resistance">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="finally-notify" retries="3" />
+        <zeebe:taskHeaders>
+          <zeebe:header key="notificationType" value="CARD_CREATED" />
+        </zeebe:taskHeaders>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_Resistance</bpmn:incoming>
+      <bpmn:outgoing>Flow_ResistanceToMerge</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:exclusiveGateway id="Gateway_Merge">
+      <bpmn:incoming>Flow_SupportToMerge</bpmn:incoming>
+      <bpmn:incoming>Flow_ResistanceToMerge</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToWaitDeleted</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:intermediateCatchEvent id="Event_CardDeleted" name="Card deleted">
+      <bpmn:incoming>Flow_ToWaitDeleted</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToEnd</bpmn:outgoing>
+      <bpmn:messageEventDefinition id="MessageEventDefinition_CardDeleted" messageRef="Message_CardDeleted" />
+    </bpmn:intermediateCatchEvent>
+
+    <bpmn:endEvent id="EndEvent_CardDeleted" name="Card removed">
+      <bpmn:incoming>Flow_ToEnd</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="Flow_ToColumnGateway" sourceRef="StartEvent_CardCreated" targetRef="Gateway_Column" />
+    <bpmn:sequenceFlow id="Flow_Support" name="SUPPORT" sourceRef="Gateway_Column" targetRef="Task_NotifyCreatedSupport">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=column = "SUPPORT"</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Resistance" name="RESISTANCE" sourceRef="Gateway_Column" targetRef="Task_NotifyCreatedResistance" />
+    <bpmn:sequenceFlow id="Flow_SupportToMerge" sourceRef="Task_NotifyCreatedSupport" targetRef="Gateway_Merge" />
+    <bpmn:sequenceFlow id="Flow_ResistanceToMerge" sourceRef="Task_NotifyCreatedResistance" targetRef="Gateway_Merge" />
+    <bpmn:sequenceFlow id="Flow_ToWaitDeleted" sourceRef="Gateway_Merge" targetRef="Event_CardDeleted" />
+    <bpmn:sequenceFlow id="Flow_ToEnd" sourceRef="Event_CardDeleted" targetRef="EndEvent_CardDeleted" />
+
+    <!-- Live price reached the target: non-interrupting, may fire many times during the card's life. -->
+    <bpmn:subProcess id="EventSub_TargetPriceHit" name="Target price hit" triggeredByEvent="true">
+      <bpmn:startEvent id="StartEvent_TargetPriceHit" name="target-price-hit" isInterrupting="false">
+        <bpmn:outgoing>Flow_TargetHitToNotify</bpmn:outgoing>
+        <bpmn:messageEventDefinition id="MessageEventDefinition_TargetPriceHit" messageRef="Message_TargetPriceHit" />
+      </bpmn:startEvent>
+      <bpmn:serviceTask id="Task_NotifyTargetHit" name="Notify: target price hit">
+        <bpmn:extensionElements>
+          <zeebe:taskDefinition type="finally-notify" retries="3" />
+          <zeebe:taskHeaders>
+            <zeebe:header key="notificationType" value="TARGET_HIT" />
+          </zeebe:taskHeaders>
+        </bpmn:extensionElements>
+        <bpmn:incoming>Flow_TargetHitToNotify</bpmn:incoming>
+        <bpmn:outgoing>Flow_TargetHitToEnd</bpmn:outgoing>
+      </bpmn:serviceTask>
+      <bpmn:endEvent id="EndEvent_TargetHitNotified" name="Alert sent">
+        <bpmn:incoming>Flow_TargetHitToEnd</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_TargetHitToNotify" sourceRef="StartEvent_TargetPriceHit" targetRef="Task_NotifyTargetHit" />
+      <bpmn:sequenceFlow id="Flow_TargetHitToEnd" sourceRef="Task_NotifyTargetHit" targetRef="EndEvent_TargetHitNotified" />
+    </bpmn:subProcess>
+
+    <!-- Card moved / target edited: message variables (column, targetPrice) update the process variables. -->
+    <bpmn:subProcess id="EventSub_CardMoved" name="Card moved" triggeredByEvent="true">
+      <bpmn:startEvent id="StartEvent_CardMoved" name="card-moved" isInterrupting="false">
+        <bpmn:outgoing>Flow_MovedToNotify</bpmn:outgoing>
+        <bpmn:messageEventDefinition id="MessageEventDefinition_CardMoved" messageRef="Message_CardMoved" />
+      </bpmn:startEvent>
+      <bpmn:serviceTask id="Task_NotifyCardMoved" name="Notify: card moved">
+        <bpmn:extensionElements>
+          <zeebe:taskDefinition type="finally-notify" retries="3" />
+          <zeebe:taskHeaders>
+            <zeebe:header key="notificationType" value="CARD_MOVED" />
+          </zeebe:taskHeaders>
+        </bpmn:extensionElements>
+        <bpmn:incoming>Flow_MovedToNotify</bpmn:incoming>
+        <bpmn:outgoing>Flow_MovedToEnd</bpmn:outgoing>
+      </bpmn:serviceTask>
+      <bpmn:endEvent id="EndEvent_CardMovedNotified" name="Move notified">
+        <bpmn:incoming>Flow_MovedToEnd</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_MovedToNotify" sourceRef="StartEvent_CardMoved" targetRef="Task_NotifyCardMoved" />
+      <bpmn:sequenceFlow id="Flow_MovedToEnd" sourceRef="Task_NotifyCardMoved" targetRef="EndEvent_CardMovedNotified" />
+    </bpmn:subProcess>
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_KanbanCard">
+    <bpmndi:BPMNPlane id="BPMNPlane_KanbanCard" bpmnElement="kanban-card">
+      <bpmndi:BPMNShape id="StartEvent_CardCreated_di" bpmnElement="StartEvent_CardCreated">
+        <dc:Bounds x="152" y="182" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="139" y="225" width="62" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_Column_di" bpmnElement="Gateway_Column" isMarkerVisible="true">
+        <dc:Bounds x="235" y="175" width="50" height="50" />
+        <bpmndi:BPMNLabel><dc:Bounds x="292" y="193" width="42" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_NotifyCreatedSupport_di" bpmnElement="Task_NotifyCreatedSupport">
+        <dc:Bounds x="340" y="80" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_NotifyCreatedResistance_di" bpmnElement="Task_NotifyCreatedResistance">
+        <dc:Bounds x="340" y="250" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_Merge_di" bpmnElement="Gateway_Merge" isMarkerVisible="true">
+        <dc:Bounds x="515" y="175" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_CardDeleted_di" bpmnElement="Event_CardDeleted">
+        <dc:Bounds x="612" y="182" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="599" y="225" width="62" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_CardDeleted_di" bpmnElement="EndEvent_CardDeleted">
+        <dc:Bounds x="712" y="182" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="696" y="225" width="68" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_ToColumnGateway_di" bpmnElement="Flow_ToColumnGateway">
+        <di:waypoint x="188" y="200" />
+        <di:waypoint x="235" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Support_di" bpmnElement="Flow_Support">
+        <di:waypoint x="260" y="175" />
+        <di:waypoint x="260" y="120" />
+        <di:waypoint x="340" y="120" />
+        <bpmndi:BPMNLabel><dc:Bounds x="268" y="100" width="50" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Resistance_di" bpmnElement="Flow_Resistance">
+        <di:waypoint x="260" y="225" />
+        <di:waypoint x="260" y="290" />
+        <di:waypoint x="340" y="290" />
+        <bpmndi:BPMNLabel><dc:Bounds x="266" y="296" width="64" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_SupportToMerge_di" bpmnElement="Flow_SupportToMerge">
+        <di:waypoint x="460" y="120" />
+        <di:waypoint x="540" y="120" />
+        <di:waypoint x="540" y="175" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ResistanceToMerge_di" bpmnElement="Flow_ResistanceToMerge">
+        <di:waypoint x="460" y="290" />
+        <di:waypoint x="540" y="290" />
+        <di:waypoint x="540" y="225" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ToWaitDeleted_di" bpmnElement="Flow_ToWaitDeleted">
+        <di:waypoint x="565" y="200" />
+        <di:waypoint x="612" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ToEnd_di" bpmnElement="Flow_ToEnd">
+        <di:waypoint x="648" y="200" />
+        <di:waypoint x="712" y="200" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNShape id="EventSub_TargetPriceHit_di" bpmnElement="EventSub_TargetPriceHit" isExpanded="true">
+        <dc:Bounds x="160" y="380" width="460" height="140" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="StartEvent_TargetPriceHit_di" bpmnElement="StartEvent_TargetPriceHit">
+        <dc:Bounds x="200" y="432" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="180" y="475" width="76" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_NotifyTargetHit_di" bpmnElement="Task_NotifyTargetHit">
+        <dc:Bounds x="290" y="410" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_TargetHitNotified_di" bpmnElement="EndEvent_TargetHitNotified">
+        <dc:Bounds x="472" y="432" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="466" y="475" width="48" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_TargetHitToNotify_di" bpmnElement="Flow_TargetHitToNotify">
+        <di:waypoint x="236" y="450" />
+        <di:waypoint x="290" y="450" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_TargetHitToEnd_di" bpmnElement="Flow_TargetHitToEnd">
+        <di:waypoint x="410" y="450" />
+        <di:waypoint x="472" y="450" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNShape id="EventSub_CardMoved_di" bpmnElement="EventSub_CardMoved" isExpanded="true">
+        <dc:Bounds x="160" y="560" width="460" height="140" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="StartEvent_CardMoved_di" bpmnElement="StartEvent_CardMoved">
+        <dc:Bounds x="200" y="612" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="188" y="655" width="60" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_NotifyCardMoved_di" bpmnElement="Task_NotifyCardMoved">
+        <dc:Bounds x="290" y="590" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_CardMovedNotified_di" bpmnElement="EndEvent_CardMovedNotified">
+        <dc:Bounds x="472" y="612" width="36" height="36" />
+        <bpmndi:BPMNLabel><dc:Bounds x="456" y="655" width="68" height="14" /></bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_MovedToNotify_di" bpmnElement="Flow_MovedToNotify">
+        <di:waypoint x="236" y="630" />
+        <di:waypoint x="290" y="630" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_MovedToEnd_di" bpmnElement="Flow_MovedToEnd">
+        <di:waypoint x="410" y="630" />
+        <di:waypoint x="472" y="630" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

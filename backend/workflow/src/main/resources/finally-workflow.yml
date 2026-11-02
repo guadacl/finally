@@ -1,0 +1,28 @@
+# FinAlly workflow module defaults (Camunda 8.8 Spring SDK).
+# Imported by the app with:  spring.config.import: optional:classpath:finally-workflow.yml
+#
+#   FINALLY_WORKFLOW_ENABLED=false  -> no Camunda client at all; notifications are published directly.
+#   CAMUNDA_GRPC_ADDRESS / CAMUNDA_REST_ADDRESS -> compose: http://camunda:26500 / http://camunda:8080;
+#   defaults are the host ports of camunda/compose.camunda.yml (26500 / 8081) for local dev outside Docker.
+finally:
+  workflow:
+    enabled: ${FINALLY_WORKFLOW_ENABLED:true}
+
+camunda:
+  client:
+    # Follows finally.workflow.enabled, so tests only need to set finally.workflow.enabled=false.
+    enabled: ${finally.workflow.enabled:true}
+    mode: self-managed
+    grpc-address: ${CAMUNDA_GRPC_ADDRESS:http://localhost:26500}
+    rest-address: ${CAMUNDA_REST_ADDRESS:http://localhost:8081}
+    # Local docker setup runs with an unprotected API (no auth).
+    auth:
+      method: none
+    request-timeout: 10s
+    # BPMN deployment is done by com.finallyapp.workflow.BpmnDeployer (retrying, non-blocking).
+    deployment:
+      enabled: false
+    worker:
+      defaults:
+        max-jobs-active: 32
+        timeout: 30s

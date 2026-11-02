@@ -1,0 +1,504 @@
+openapi: 3.0.3
+info:
+  title: FinAlly API
+  version: 1.0.0
+  description: |
+    API contract for FinAlly, the AI trading workstation. Spec-first: the backend generates
+    Spring interfaces from this file and the frontend client must match it.
+    All money/price/quantity values are JSON numbers. Timestamps are ISO-8601 (UTC).
+servers:
+  - url: /
+tags:
+  - name: system
+  - name: market
+  - name: portfolio
+  - name: watchlist
+  - name: chat
+  - name: kanban
+paths:
+  /api/health:
+    get:
+      tags: [system]
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+
+  /api/stream/prices:
+    get:
+      tags: [market]
+      operationId: streamPrices
+      description: |
+        Server-Sent Events. Event name `price`, data = PriceUpdate JSON, one event per ticker
+        roughly every 500 ms. Heartbeat comment `: ping` every 15 s.
+        Implemented by hand with SseEmitter (excluded from code generation).
+      x-sse: true
+      responses:
+        '200':
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema: { $ref: '#/components/schemas/PriceUpdate' }
+
+  /api/stream/notifications:
+    get:
+      tags: [market]
+      operationId: streamNotifications
+      description: |
+        Server-Sent Events. Event name `notification`, data = Notification JSON.
+        Heartbeat comment `: ping` every 15 s. Implemented by hand with SseEmitter.
+      x-sse: true
+      responses:
+        '200':
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema: { $ref: '#/components/schemas/Notification' }
+
+  /api/portfolio:
+    get:
+      tags: [portfolio]
+      operationId: getPortfolio
+      responses:
+        '200':
+          description: Current portfolio
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Portfolio' }
+
+  /api/portfolio/trade:
+    post:
+      tags: [portfolio]
+      operationId: executeTrade
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TradeRequest' }
+      responses:
+        '200':
+          description: Trade executed (market order, instant fill)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TradeResult' }
+        '400':
+          description: Validation failed (unknown ticker, insufficient cash/shares, bad quantity)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/portfolio/history:
+    get:
+      tags: [portfolio]
+      operationId: getPortfolioHistory
+      responses:
+        '200':
+          description: Portfolio value snapshots, oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PortfolioSnapshot' }
+
+  /api/watchlist:
+    get:
+      tags: [watchlist]
+      operationId: getWatchlist
+      responses:
+        '200':
+          description: Watched tickers with latest prices
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/WatchlistItem' }
+    post:
+      tags: [watchlist]
+      operationId: addToWatchlist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WatchlistAddRequest' }
+      responses:
+        '201':
+          description: Ticker added
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WatchlistItem' }
+        '400':
+          description: Invalid ticker
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          description: Ticker already on the watchlist
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/watchlist/{ticker}:
+    delete:
+      tags: [watchlist]
+      operationId: removeFromWatchlist
+      parameters:
+        - name: ticker
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '204':
+          description: Removed
+        '404':
+          description: Ticker not on the watchlist
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/chat:
+    post:
+      tags: [chat]
+      operationId: sendChatMessage
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChatRequest' }
+      responses:
+        '200':
+          description: Assistant reply plus the actions that were auto-executed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatResponse' }
+        '502':
+          description: LLM call failed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/chat/history:
+    get:
+      tags: [chat]
+      operationId: getChatHistory
+      responses:
+        '200':
+          description: Conversation history, oldest first (last 50)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ChatMessage' }
+
+  /api/kanban:
+    get:
+      tags: [kanban]
+      operationId: getKanbanCards
+      responses:
+        '200':
+          description: All cards, ordered by column then sortOrder
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/KanbanCard' }
+    post:
+      tags: [kanban]
+      operationId: createKanbanCard
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/KanbanCardCreate' }
+      responses:
+        '201':
+          description: Card created (starts a Camunda `kanban-card` process)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KanbanCard' }
+        '400':
+          description: Invalid ticker, column or price
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/kanban/{id}:
+    patch:
+      tags: [kanban]
+      operationId: updateKanbanCard
+      description: Move a card (column / sortOrder) and/or edit its target price. Re-arms the alert.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/KanbanCardUpdate' }
+      responses:
+        '200':
+          description: Updated card
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KanbanCard' }
+        '400':
+          description: Invalid update
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: Card not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    delete:
+      tags: [kanban]
+      operationId: deleteKanbanCard
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Deleted (ends the Camunda process instance)
+        '404':
+          description: Card not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+components:
+  schemas:
+    Error:
+      type: object
+      required: [error, message]
+      properties:
+        error: { type: string, description: 'Machine-readable code, e.g. INSUFFICIENT_CASH' }
+        message: { type: string }
+
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string, example: ok }
+        database: { type: string, example: up }
+        workflow: { type: string, example: up }
+        marketData: { type: string, example: simulator }
+
+    Direction:
+      type: string
+      enum: [up, down, flat]
+
+    PriceUpdate:
+      type: object
+      required: [ticker, price, previousPrice, timestamp, direction]
+      properties:
+        ticker: { type: string }
+        price: { type: number }
+        previousPrice: { type: number }
+        timestamp: { type: string, format: date-time }
+        direction: { $ref: '#/components/schemas/Direction' }
+
+    TradeSide:
+      type: string
+      enum: [buy, sell]
+
+    TradeRequest:
+      type: object
+      required: [ticker, quantity, side]
+      properties:
+        ticker: { type: string, example: AAPL }
+        quantity: { type: number, exclusiveMinimum: true, minimum: 0, example: 10 }
+        side: { $ref: '#/components/schemas/TradeSide' }
+
+    Trade:
+      type: object
+      required: [id, ticker, side, quantity, price, executedAt]
+      properties:
+        id: { type: string, format: uuid }
+        ticker: { type: string }
+        side: { $ref: '#/components/schemas/TradeSide' }
+        quantity: { type: number }
+        price: { type: number }
+        executedAt: { type: string, format: date-time }
+
+    TradeResult:
+      type: object
+      required: [trade, portfolio]
+      properties:
+        trade: { $ref: '#/components/schemas/Trade' }
+        portfolio: { $ref: '#/components/schemas/Portfolio' }
+
+    Position:
+      type: object
+      required: [ticker, quantity, avgCost, currentPrice, marketValue, unrealizedPnl, unrealizedPnlPercent]
+      properties:
+        ticker: { type: string }
+        quantity: { type: number }
+        avgCost: { type: number }
+        currentPrice: { type: number }
+        marketValue: { type: number }
+        unrealizedPnl: { type: number }
+        unrealizedPnlPercent: { type: number, description: 'e.g. 5.25 means +5.25%' }
+
+    Portfolio:
+      type: object
+      required: [cashBalance, positionsValue, totalValue, unrealizedPnl, positions]
+      properties:
+        cashBalance: { type: number }
+        positionsValue: { type: number }
+        totalValue: { type: number }
+        unrealizedPnl: { type: number }
+        positions:
+          type: array
+          items: { $ref: '#/components/schemas/Position' }
+
+    PortfolioSnapshot:
+      type: object
+      required: [totalValue, recordedAt]
+      properties:
+        totalValue: { type: number }
+        recordedAt: { type: string, format: date-time }
+
+    WatchlistAddRequest:
+      type: object
+      required: [ticker]
+      properties:
+        ticker: { type: string, example: PYPL }
+
+    WatchlistItem:
+      type: object
+      required: [ticker, addedAt]
+      properties:
+        ticker: { type: string }
+        price: { type: number, nullable: true, description: 'null until the first price arrives' }
+        previousPrice: { type: number, nullable: true }
+        sessionOpenPrice: { type: number, nullable: true, description: 'First price seen since the server started; base for daily change %' }
+        changePercent: { type: number, nullable: true, description: 'Change vs sessionOpenPrice, in percent' }
+        addedAt: { type: string, format: date-time }
+
+    ChatRequest:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string, minLength: 1, maxLength: 4000 }
+
+    ActionStatus:
+      type: string
+      enum: [executed, failed]
+
+    ExecutedTrade:
+      type: object
+      required: [ticker, side, quantity, status]
+      properties:
+        ticker: { type: string }
+        side: { $ref: '#/components/schemas/TradeSide' }
+        quantity: { type: number }
+        price: { type: number, nullable: true }
+        status: { $ref: '#/components/schemas/ActionStatus' }
+        error: { type: string, nullable: true }
+
+    WatchlistAction:
+      type: string
+      enum: [add, remove]
+
+    ExecutedWatchlistChange:
+      type: object
+      required: [ticker, action, status]
+      properties:
+        ticker: { type: string }
+        action: { $ref: '#/components/schemas/WatchlistAction' }
+        status: { $ref: '#/components/schemas/ActionStatus' }
+        error: { type: string, nullable: true }
+
+    ChatActions:
+      type: object
+      required: [trades, watchlistChanges]
+      properties:
+        trades:
+          type: array
+          items: { $ref: '#/components/schemas/ExecutedTrade' }
+        watchlistChanges:
+          type: array
+          items: { $ref: '#/components/schemas/ExecutedWatchlistChange' }
+
+    ChatResponse:
+      type: object
+      required: [id, message, actions, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        message: { type: string }
+        actions: { $ref: '#/components/schemas/ChatActions' }
+        createdAt: { type: string, format: date-time }
+
+    ChatRole:
+      type: string
+      enum: [user, assistant]
+
+    ChatMessage:
+      type: object
+      required: [id, role, content, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        role: { $ref: '#/components/schemas/ChatRole' }
+        content: { type: string }
+        actions:
+          allOf: [ { $ref: '#/components/schemas/ChatActions' } ]
+          nullable: true
+        createdAt: { type: string, format: date-time }
+
+    KanbanColumn:
+      type: string
+      enum: [SUPPORT, RESISTANCE]
+
+    KanbanCard:
+      type: object
+      required: [id, ticker, column, targetPrice, sortOrder, armed, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        ticker: { type: string }
+        column: { $ref: '#/components/schemas/KanbanColumn' }
+        targetPrice: { type: number }
+        sortOrder: { type: integer }
+        armed: { type: boolean, description: 'false after an alert fired, until the price crosses back' }
+        currentPrice: { type: number, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    KanbanCardCreate:
+      type: object
+      required: [ticker, column, targetPrice]
+      properties:
+        ticker: { type: string }
+        column: { $ref: '#/components/schemas/KanbanColumn' }
+        targetPrice: { type: number, exclusiveMinimum: true, minimum: 0 }
+
+    KanbanCardUpdate:
+      type: object
+      properties:
+        column: { $ref: '#/components/schemas/KanbanColumn' }
+        targetPrice: { type: number, exclusiveMinimum: true, minimum: 0 }
+        sortOrder: { type: integer, minimum: 0 }
+
+    NotificationType:
+      type: string
+      enum: [CARD_CREATED, CARD_MOVED, TARGET_HIT]
+
+    Notification:
+      type: object
+      required: [id, type, cardId, ticker, column, targetPrice, message, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        type: { $ref: '#/components/schemas/NotificationType' }
+        cardId: { type: string, format: uuid }
+        ticker: { type: string }
+        column: { $ref: '#/components/schemas/KanbanColumn' }
+        targetPrice: { type: number }
+        price: { type: number, nullable: true }
+        message: { type: string }
+        createdAt: { type: string, format: date-time }

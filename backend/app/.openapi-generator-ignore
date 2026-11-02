@@ -1,0 +1,2 @@
+# SSE endpoints (market tag) are hand-written with SseEmitter; skip the generated (reactive) interface.
+**/MarketApi.java

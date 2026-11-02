@@ -1,0 +1,81 @@
+spring:
+  application:
+    name: finally
+  config:
+    # finally-workflow.yml comes from the workflow module jar (Camunda client settings).
+    # The project-root .env is loaded for local runs (cwd = repo root, backend/ or backend/app); in Docker it is
+    # injected as real environment variables instead.
+    import:
+      - optional:classpath:finally-workflow.yml
+      - optional:file:.env[.properties]
+      - optional:file:../.env[.properties]
+      - optional:file:../../.env[.properties]
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/finally}
+    username: ${SPRING_DATASOURCE_USERNAME:finally}
+    password: ${SPRING_DATASOURCE_PASSWORD:finally}
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 10000
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  jackson:
+    time-zone: UTC
+    serialization:
+      write-dates-as-timestamps: false
+    generator:
+      write-bigdecimal-as-plain: true
+    deserialization:
+      adjust-dates-to-context-time-zone: false
+  mvc:
+    async:
+      request-timeout: -1
+  task:
+    scheduling:
+      pool:
+        size: 4
+  threads:
+    virtual:
+      enabled: false
+
+server:
+  port: 8000
+  shutdown: graceful
+  compression:
+    enabled: true
+    mime-types: application/json,text/html,text/css,application/javascript
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+finally:
+  workflow:
+    enabled: ${FINALLY_WORKFLOW_ENABLED:true}
+  llm:
+    mock: ${LLM_MOCK:false}
+    api-key: ${OPENROUTER_API_KEY:}
+    base-url: https://openrouter.ai/api/v1
+    model: openai/gpt-oss-120b
+    provider: cerebras
+    timeout: 45s
+    history-limit: 20
+  market:
+    massive-api-key: ${MASSIVE_API_KEY:}
+    massive-base-url: ${MASSIVE_BASE_URL:https://api.massive.com}
+    massive-poll-interval: ${MASSIVE_POLL_INTERVAL:15s}
+    simulator-interval: 500ms
+    event-probability: 0.001
+  stream:
+    price-interval-ms: 500
+    heartbeat-ms: 15000
+  portfolio:
+    snapshot-interval-ms: 30000
+    snapshot-initial-delay-ms: 5000
+
+logging:
+  level:
+    com.finallyapp: INFO

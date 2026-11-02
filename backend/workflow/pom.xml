@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>com.finallyapp</groupId>
+    <artifactId>finally-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+  </parent>
+  <artifactId>finally-workflow</artifactId>
+  <name>FinAlly Camunda workflow</name>
+  <description>Camunda 8 client, BPMN deployment and job workers. Owned by the Camunda agent.</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.finallyapp</groupId>
+      <artifactId>finally-contracts</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.camunda</groupId>
+      <artifactId>camunda-spring-boot-starter</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+      <!-- BPMN models live in the top-level camunda/bpmn folder; ship them on the classpath under bpmn/ -->
+      <resource>
+        <directory>${project.basedir}/../../camunda/bpmn</directory>
+        <targetPath>bpmn</targetPath>
+        <includes>
+          <include>**/*.bpmn</include>
+        </includes>
+      </resource>
+    </resources>
+  </build>
+</project>

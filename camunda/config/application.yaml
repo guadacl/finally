@@ -1,0 +1,31 @@
+# Camunda 8.8 orchestration cluster (Zeebe + Operate + Tasklist + Admin) - single node, LOCAL DEV ONLY.
+# Mounted into the container at /usr/local/camunda/config/application.yaml.
+# Based on camunda/camunda-distributions docker-compose/versions/camunda-8.8 (lightweight setup).
+management.endpoints.configprops.show-values: always
+camunda:
+  system:
+    cpu-thread-count: "3"
+    io-thread-count: "3"
+  security:
+    authentication:
+      method: "basic"
+      # The FinAlly app talks to the APIs without credentials; the web apps still require a login.
+      unprotectedApi: true
+    authorizations:
+      enabled: false
+    initialization:
+      users:
+        - username: "demo"
+          password: "demo"
+          name: "Demo User"
+          email: "demo@demo.com"
+      defaultRoles.admin.users:
+        - "demo"
+  # Single-node Elasticsearch: no replicas
+  database.index.numberOfReplicas: 0
+  data:
+    secondary-storage:
+      type: elasticsearch
+      elasticsearch:
+        cluster-name: elasticsearch
+        url: "http://camunda-elasticsearch:9200"

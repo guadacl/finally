@@ -1,0 +1,111 @@
+@import 'tailwindcss';
+
+/* FinAlly dark terminal theme */
+@theme {
+  --color-bg: #0d1117;
+  --color-panel: #131a24;
+  --color-panel-2: #1a1a2e;
+  --color-edge: #2a3240;
+  --color-edge-strong: #3a4454;
+  --color-fg: #d6dde6;
+  --color-muted: #7d8794;
+  --color-accent: #ecad0a;
+  --color-primary: #209dd7;
+  --color-secondary: #753991;
+  --color-up: #26c281;
+  --color-down: #ef5350;
+
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    font-size: 13px;
+  }
+  input,
+  select,
+  button {
+    font: inherit;
+  }
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-edge);
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer components {
+  .panel {
+    @apply rounded-md border border-edge bg-panel;
+  }
+  .panel-title {
+    @apply flex items-center justify-between border-b border-edge px-3 py-1.5 text-[11px] font-semibold tracking-widest text-muted uppercase;
+  }
+  .num {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .field {
+    @apply rounded border border-edge bg-bg px-2 py-1 text-fg outline-none placeholder:text-muted/70 focus:border-primary;
+  }
+  .btn {
+    @apply cursor-pointer rounded px-3 py-1 text-xs font-semibold tracking-wide uppercase transition-colors disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-submit {
+    @apply bg-secondary text-white hover:bg-secondary/80;
+  }
+  .btn-buy {
+    @apply bg-up/85 text-bg hover:bg-up;
+  }
+  .btn-sell {
+    @apply bg-down/85 text-white hover:bg-down;
+  }
+  .btn-ghost {
+    @apply border border-edge text-muted hover:border-primary hover:text-fg;
+  }
+  .grid-table {
+    @apply w-full border-collapse text-xs;
+  }
+  .grid-table th {
+    @apply sticky top-0 z-10 bg-panel px-2 py-1 text-left text-[10px] font-semibold tracking-wider text-muted uppercase;
+  }
+  .grid-table td {
+    @apply border-t border-edge/60 px-2 py-1;
+  }
+}
+
+/* Price flash: class is applied on change, then removed; background fades over ~500ms. */
+@keyframes flash-up {
+  from {
+    background-color: rgb(38 194 129 / 0.45);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+@keyframes flash-down {
+  from {
+    background-color: rgb(239 83 80 / 0.45);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+.flash-up {
+  animation: flash-up 500ms ease-out;
+}
+.flash-down {
+  animation: flash-down 500ms ease-out;
+}

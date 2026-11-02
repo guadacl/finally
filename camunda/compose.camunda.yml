@@ -1,0 +1,59 @@
+# Camunda 8.8 for FinAlly (included by the root docker-compose.yml) - LOCAL DEV ONLY.
+#
+#   camunda                 camunda/camunda (orchestration cluster: Zeebe + Operate + Tasklist + Admin)
+#   camunda-elasticsearch   secondary storage required by Operate/Tasklist in 8.8
+#                           (H2/RDBMS secondary storage only became the lightweight default in 8.9)
+#
+# Ports on the host: 26500 (Zeebe gRPC), 8081 -> 8080 (REST API + web apps: http://localhost:8081, demo/demo).
+# Standalone:  docker compose -f camunda/compose.camunda.yml up -d
+# With app:    docker compose up -d camunda       (from the repo root)
+
+services:
+  camunda:
+    image: camunda/camunda:8.8.45
+    container_name: finally-camunda
+    ports:
+      # host ports are configurable (.env) in case another Camunda already uses them; the app uses the internal network
+      - "${CAMUNDA_GRPC_HOST_PORT:-26500}:26500"
+      - "${CAMUNDA_WEB_HOST_PORT:-8081}:8080"
+    environment:
+      # keep the JVM reasonably small for a laptop
+      JAVA_OPTS: "-Xms512m -Xmx1g"
+    volumes:
+      - finally-camunda:/usr/local/camunda/data
+      - ./config/application.yaml:/usr/local/camunda/config/application.yaml:ro
+    healthcheck:
+      # The image has no curl/wget: raw HTTP over bash /dev/tcp against the management port.
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9600 && printf \"GET /actuator/health/status HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n\" >&3 && grep -q \"UP\" <&3'"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    depends_on:
+      camunda-elasticsearch:
+        condition: service_healthy
+    restart: unless-stopped
+
+  camunda-elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.19.23
+    container_name: finally-camunda-es
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+      cluster.routing.allocation.disk.threshold_enabled: "false"
+      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+    volumes:
+      - finally-camunda-es:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cat/health | grep -qE 'green|yellow'"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  finally-camunda:
+    name: finally-camunda
+  finally-camunda-es:
+    name: finally-camunda-es

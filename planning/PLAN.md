@@ -6,6 +6,7 @@
 
 FinAlly (Finance Ally) is a visually stunning AI-powered trading workstation that streams live market data, lets users trade a simulated portfolio, and integrates an LLM chat assistant that can analyze positions and execute trades on the user's behalf. It looks and feels like a modern Bloomberg terminal with an AI copilot.
 
+
 This is the capstone project for an agentic AI coding course. It is built entirely by Coding Agents demonstrating how orchestrated AI agents can produce a production-quality full-stack application. Agents interact through files in `planning/`.
 
 ## 2. User Experience
@@ -19,6 +20,10 @@ The user runs a single Docker command (or a provided start script). A browser op
 - A dark, data-rich trading terminal aesthetic
 - An AI chat panel ready to assist
 
+The menu of the web application contain markets watchlists portafolio 
+
+
+
 ### What the User Can Do
 
 - **Watch prices stream** — prices flash green (uptick) or red (downtick) with subtle CSS animations that fade
@@ -27,6 +32,10 @@ The user runs a single Docker command (or a provided start script). A browser op
 - **Buy and sell shares** — market orders only, instant fill at current price, no fees, no confirmation dialog
 - **Monitor their portfolio** — a heatmap (treemap) showing positions sized by weight and colored by P&L, plus a P&L chart tracking total portfolio value over time
 - **View a positions table** — ticker, quantity, average cost, current price, unrealized P&L, % change
+- **In portafolio I want a kamban dashboard to create move delete stocks in 2 separate kamban column callee: support and resistence.Each item in the kamban dashboard must contain a label with real time price name and an editable field that must be a price to buy or to sell.
+  - **Target price alerts**: when the live price hits a card's target price, the user receives a notification. A **Support** card triggers when price ≤ target; a **Resistance** card triggers when price ≥ target. Each card notifies once per crossing and re-arms only after the price moves back to the other side of the target (no repeated alerts every tick). Editing the target price re-arms the card. No trade is executed automatically.
+  - The backend checks targets against the price cache on every price update. When a target is hit, it publishes a `target-price-hit` message to the card's Camunda process instance, and the process runs the notification task.
+  - **Notification channel: in-app pop-up (toast)** in the browser. The Camunda notification task is handled by a Spring job worker that pushes a `notification` event to the browser over SSE (`/api/stream/notifications`). The frontend shows it as a toast in the top-right corner (ticker, column, target price, current price), auto-dismissing after ~6 seconds, styled with the dark theme (Accent Yellow border for alerts). The same channel delivers the "card created" notification from the Camunda gateway. Notifications only reach an open browser tab; there is no email, Slack or OS-level notification.
 - **Chat with the AI assistant** — ask about their portfolio, get analysis, and have the AI execute trades and manage the watchlist through natural language
 - **Manage the watchlist** — add/remove tickers manually or via the AI chat
 
@@ -45,26 +54,33 @@ The user runs a single Docker command (or a provided start script). A browser op
 
 ## 3. Architecture Overview
 
-### Single Container, Single Port
+### Docker Compose, Three Services
+
+The whole stack is started with a single `docker compose up`. The browser only talks to the `app` service on port 8000; Postgres and Camunda are internal services on the compose network.
 
 ```
-┌─────────────────────────────────────────────────┐
-│  Docker Container (port 8000)                   │
-│                                                 │
-│  FastAPI (Python/uv)                            │
-│  ├── /api/*          REST endpoints             │
-│  ├── /api/stream/*   SSE streaming              │
-│  └── /*              Static file serving         │
-│                      (Next.js export)            │
-│                                                 │
-│  SQLite database (volume-mounted)               │
-│  Background task: market data polling/sim        │
-└─────────────────────────────────────────────────┘
+┌──────────────────────── docker compose ────────────────────────┐
+│                                                                │
+│  app  (port 8000, exposed)                                     │
+│  Spring Boot (Java 21, Maven)                                  │
+│  ├── /api/*          REST endpoints (OpenAPI)                  │
+│  ├── /api/stream/*   SSE streaming                             │
+│  └── /*              Static file serving (Angular build)       │
+│  Background task: market data polling/sim                      │
+│  Camunda job workers (notifications)                           │
+│        │                         │                             │
+│        ▼                         ▼                             │
+│  postgres (5432, internal)   camunda (Camunda 8 Run)           │
+│  volume: finally-pgdata      gRPC 26500 / REST 8080 (internal) │
+│                              Operate UI on 8081 (optional)     │
+│                              volume: finally-camunda           │
+└────────────────────────────────────────────────────────────────┘
 ```
 
-- **Frontend**: Next.js with TypeScript, built as a static export (`output: 'export'`), served by FastAPI as static files
-- **Backend**: FastAPI (Python), managed as a `uv` project
-- **Database**: SQLite, single file at `db/finally.db`, volume-mounted for persistence
+- **Frontend**: Angular last version
+- **Backend**: Java Spring Application, Open API 
+- **Database**: Postgres 16, running as the `postgres` service in Docker Compose, data persisted in the named volume `finally-pgdata`
+- **workflow**: Andled using Camunda. For instance when you create a new stock in Kamunda dashboard the column SUPPORT of RESISTENCE status must be in the Camunda workflow, In Camunda create a gateway that send notification when I create a new task/stock in the kamban dashboard. Camunda must run as docker container
 - **Real-time data**: Server-Sent Events (SSE) — simpler than WebSockets, one-way server→client push, works everywhere
 - **AI integration**: LiteLLM → OpenRouter (Cerebras for fast inference), with structured outputs for trade execution
 - **Market data**: Environment-variable driven — simulator by default, real data via Massive API if key provided
@@ -74,10 +90,10 @@ The user runs a single Docker command (or a provided start script). A browser op
 | Decision | Rationale |
 |---|---|
 | SSE over WebSockets | One-way push is all we need; simpler, no bidirectional complexity, universal browser support |
-| Static Next.js export | Single origin, no CORS issues, one port, one container, simple deployment |
-| SQLite over Postgres | No auth = no multi-user = no need for a database server; self-contained, zero config |
-| Single Docker container | Students run one command; no docker-compose for production, no service orchestration |
-| uv for Python | Fast, modern Python project management; reproducible lockfile; what students should learn |
+| Angular build served by Spring Boot | Single origin, no CORS issues, one exposed port |
+| Postgres | Real relational database, shared with Camunda-related state; runs as a compose service |
+| Docker Compose | Postgres and Camunda are separate servers; compose still gives users one command (`docker compose up`) |
+| Maven for Java | Standard Java build tool; reproducible builds; Spring Boot starter support |
 | Market orders only | Eliminates order book, limit order logic, partial fills — dramatically simpler portfolio math |
 
 ---
@@ -86,32 +102,30 @@ The user runs a single Docker command (or a provided start script). A browser op
 
 ```
 finally/
-├── frontend/                 # Next.js TypeScript project (static export)
-├── backend/                  # FastAPI uv project (Python)
+├── frontend/                 # Angularproject (static export)
+├── backend/                  # OpenAPI  (JAVA) and Springboot
 │   └── db/                   # Schema definitions, seed data, migration logic
 ├── planning/                 # Project-wide documentation for agents
 │   ├── PLAN.md               # This document
 │   └── ...                   # Additional agent reference docs
 ├── scripts/
-│   ├── start_mac.sh          # Launch Docker container (macOS/Linux)
-│   ├── stop_mac.sh           # Stop Docker container (macOS/Linux)
-│   ├── start_windows.ps1     # Launch Docker container (Windows PowerShell)
-│   └── stop_windows.ps1      # Stop Docker container (Windows PowerShell)
+│   ├── start_mac.sh          # docker compose up (macOS/Linux)
+│   ├── stop_mac.sh           # docker compose down (macOS/Linux)
+│   ├── start_windows.ps1     # docker compose up (Windows PowerShell)
+│   └── stop_windows.ps1      # docker compose down (Windows PowerShell)
 ├── test/                     # Playwright E2E tests + docker-compose.test.yml
-├── db/                       # Volume mount target (SQLite file lives here at runtime)
-│   └── .gitkeep              # Directory exists in repo; finally.db is gitignored
-├── Dockerfile                # Multi-stage build (Node → Python)
-├── docker-compose.yml        # Optional convenience wrapper
+├── Dockerfile                # Multi-stage build for the app service (Angular → Java)
+├── docker-compose.yml        # Defines app, postgres, camunda services + named volumes
 ├── .env                      # Environment variables (gitignored, .env.example committed)
 └── .gitignore
 ```
 
 ### Key Boundaries
 
-- **`frontend/`** is a self-contained Next.js project. It knows nothing about Python. It talks to the backend via `/api/*` endpoints and `/api/stream/*` SSE endpoints. Internal structure is up to the Frontend Engineer agent.
+- **`frontend/`** is a self-contained Next.js project. It knows nothing about Angular. It talks to the backend via `/api/*` endpoints and `/api/stream/*` SSE endpoints. Internal structure is up to the Frontend Engineer agent.
 - **`backend/`** is a self-contained uv project with its own `pyproject.toml`. It owns all server logic including database initialization, schema, seed data, API routes, SSE streaming, market data, and LLM integration. Internal structure is up to the Backend/Market Data agents.
-- **`backend/db/`** contains schema SQL definitions and seed logic. The backend lazily initializes the database on first request — creating tables and seeding default data if the SQLite file doesn't exist or is empty.
-- **`db/`** at the top level is the runtime volume mount point. The SQLite file (`db/finally.db`) is created here by the backend and persists across container restarts via Docker volume.
+- **`backend/db/`** contains schema SQL definitions and seed logic. On startup the backend connects to the `postgres` service and applies migrations/seed data if the tables are missing.
+- **Persistence** lives in named Docker volumes (`finally-pgdata` for Postgres, `finally-camunda` for Camunda), not in a project directory.
 - **`planning/`** contains project-wide documentation, including this plan. All agents reference files here as the shared contract.
 - **`test/`** contains Playwright E2E tests and supporting infrastructure (e.g., `docker-compose.test.yml`). Unit tests live within `frontend/` and `backend/` respectively, following each framework's conventions.
 - **`scripts/`** contains start/stop scripts that wrap Docker commands.
@@ -183,9 +197,9 @@ Both the simulator and the Massive client implement the same abstract interface.
 
 ## 7. Database
 
-### SQLite with Lazy Initialization
+### Postgres with Automatic Migrations
 
-The backend checks for the SQLite database on startup (or first request). If the file doesn't exist or tables are missing, it creates the schema and seeds default data. This means:
+On startup the backend connects to the `postgres` compose service and runs Flyway migrations. If the tables are missing, it creates the schema and seeds default data. This means:
 
 - No separate migration step
 - No manual database setup
@@ -252,6 +266,7 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/stream/prices` | SSE stream of live price updates |
+| GET | `/api/stream/notifications` | SSE stream of notification events (target price hit, kanban card created) shown as browser pop-ups |
 
 ### Portfolio
 | Method | Path | Description |
@@ -373,45 +388,53 @@ The frontend is a single-page application with a dense, terminal-inspired layout
 
 ## 11. Docker & Deployment
 
-### Multi-Stage Dockerfile
+### Docker Compose (`docker-compose.yml`)
+
+| Service | Image | Ports | Volume | Notes |
+|---|---|---|---|---|
+| `app` | built from `Dockerfile` | `8000:8000` | — | `env_file: .env`; `depends_on` postgres and camunda (healthy) |
+| `postgres` | `postgres:16` | internal only (optionally `5432:5432` for dev) | `finally-pgdata:/var/lib/postgresql/data` | healthcheck `pg_isready` |
+| `camunda` | Camunda 8 Run | internal 26500 / 8080; `8081` for the Operate UI (optional) | `finally-camunda` | healthcheck on its REST status endpoint |
+
+The `app` service reaches the others by service name (`jdbc:postgresql://postgres:5432/finally`, `camunda:26500`).
+
+### Multi-Stage Dockerfile (app service)
 
 ```
 Stage 1: Node 20 slim
   - Copy frontend/
-  - npm install && npm run build (produces static export)
+  - npm ci && npm run build (Angular production build)
 
-Stage 2: Python 3.12 slim
-  - Install uv
+Stage 2: Maven + JDK 21
   - Copy backend/
-  - uv sync (install Python dependencies from lockfile)
-  - Copy frontend build output into a static/ directory
+  - Copy Angular build output into src/main/resources/static/
+  - mvn -B package -DskipTests
+
+Stage 3: JRE 21 slim
+  - Copy the Spring Boot jar
   - Expose port 8000
-  - CMD: uvicorn serving FastAPI app
+  - CMD: java -jar app.jar
 ```
 
-FastAPI serves the static frontend files and all API routes on port 8000.
+Spring Boot serves the Angular static files and all API routes on port 8000.
 
-### Docker Volume
+### Persistence
 
-The SQLite database persists via a named Docker volume:
-
-```bash
-docker run -v finally-data:/app/db -p 8000:8000 --env-file .env finally
-```
-
-The `db/` directory in the project root maps to `/app/db` in the container. The backend writes `finally.db` to this path.
+Named volumes defined in `docker-compose.yml` keep data across `docker compose down` / `up`:
+- `finally-pgdata` — Postgres data
+- `finally-camunda` — Camunda state
 
 ### Start/Stop Scripts
 
 **`scripts/start_mac.sh`** (macOS/Linux):
-- Builds the Docker image if not already built (or if `--build` flag passed)
-- Runs the container with the volume mount, port mapping, and `.env` file
+- Runs `docker compose up -d` (adds `--build` if the `--build` flag is passed)
+- Waits for the `app` health check (`/api/health`)
 - Prints the URL to access the app
 - Optionally opens the browser
 
 **`scripts/stop_mac.sh`** (macOS/Linux):
-- Stops and removes the running container
-- Does NOT remove the volume (data persists)
+- Runs `docker compose down`
+- Does NOT pass `-v`, so the volumes (data) persist
 
 **`scripts/start_windows.ps1`** / **`scripts/stop_windows.ps1`**: PowerShell equivalents for Windows.
 
@@ -419,7 +442,7 @@ All scripts should be idempotent — safe to run multiple times.
 
 ### Optional Cloud Deployment
 
-The container is designed to deploy to AWS App Runner, Render, or any container platform. A Terraform configuration for App Runner may be provided in a `deploy/` directory as a stretch goal, but is not part of the core build.
+The `app` image can deploy to any container platform, pointed at a managed Postgres and Camunda SaaS instead of the compose services. A Terraform configuration for App Runner may be provided in a `deploy/` directory as a stretch goal, but is not part of the core build.
 
 ---
 
@@ -442,7 +465,7 @@ The container is designed to deploy to AWS App Runner, Render, or any container 
 
 ### E2E Tests (in `test/`)
 
-**Infrastructure**: A separate `docker-compose.test.yml` in `test/` that spins up the app container plus a Playwright container. This keeps browser dependencies out of the production image.
+**Infrastructure**: A separate `docker-compose.test.yml` in `test/` that spins up the app, postgres and camunda services plus a Playwright container. This keeps browser dependencies out of the production image.
 
 **Environment**: Tests run with `LLM_MOCK=true` by default for speed and determinism.
 

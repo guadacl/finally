@@ -1,0 +1,88 @@
+# E2E stack: the full app (LLM_MOCK=true) + postgres + camunda, plus a Playwright runner container.
+#   docker compose -f test/docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from playwright
+#   docker compose -f test/docker-compose.test.yml down -v      # throw away the test data afterwards
+# Uses its own project name and volumes, so it never touches your real FinAlly data.
+
+name: finally-e2e
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: finally
+      POSTGRES_USER: finally
+      POSTGRES_PASSWORD: finally
+    volumes:
+      - e2e-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U finally -d finally"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+
+  camunda:
+    extends:
+      file: ../camunda/compose.camunda.yml
+      service: camunda
+    container_name: finally-e2e-camunda
+    ports: !reset []
+    volumes: !override
+      - e2e-camunda:/usr/local/camunda/data
+      - ../camunda/config/application.yaml:/usr/local/camunda/config/application.yaml:ro
+    depends_on: !override
+      camunda-elasticsearch:
+        condition: service_healthy
+
+  camunda-elasticsearch:
+    extends:
+      file: ../camunda/compose.camunda.yml
+      service: camunda-elasticsearch
+    container_name: finally-e2e-camunda-es
+    ports: !reset []
+    volumes: !reset []
+
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: finally-app:e2e
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/finally
+      SPRING_DATASOURCE_USERNAME: finally
+      SPRING_DATASOURCE_PASSWORD: finally
+      CAMUNDA_GRPC_ADDRESS: http://camunda:26500
+      CAMUNDA_REST_ADDRESS: http://camunda:8080
+      FINALLY_WORKFLOW_ENABLED: "true"
+      LLM_MOCK: "true"
+      MASSIVE_API_KEY: ""
+      OPENROUTER_API_KEY: ""
+    depends_on:
+      postgres:
+        condition: service_healthy
+      camunda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8000/api/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.55.0-noble
+    working_dir: /e2e
+    environment:
+      BASE_URL: http://app:8000
+      CI: "true"
+    volumes:
+      - ./:/e2e
+      - e2e-node-modules:/e2e/node_modules
+    command: ["bash", "-c", "npm install --no-audit --no-fund && npx playwright test"]
+    depends_on:
+      app:
+        condition: service_healthy
+
+volumes:
+  e2e-pgdata:
+  e2e-camunda:
+  e2e-node-modules:

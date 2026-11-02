@@ -1,0 +1,26 @@
+# Postgres for FinAlly (owned by the DB agent). Included by the root docker-compose.yml.
+# Schema is applied by Flyway inside the app at startup (classpath:db/migration).
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: finally-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-finally}
+      POSTGRES_USER: ${POSTGRES_USER:-finally}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-finally}
+    volumes:
+      - finally-pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  finally-pgdata:
+    name: finally-pgdata
