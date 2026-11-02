@@ -69,9 +69,9 @@ class SimulatorMarketDataSourceTest {
     void factoryChoosesSourceByMassiveKey() {
         RestClient.Builder b = RestClient.builder();
         ObjectMapper m = new ObjectMapper();
-        var sim = new FinallyProperties.Market("", "https://api.massive.com", Duration.ofSeconds(15), Duration.ofMillis(500), 0.001);
-        var blank = new FinallyProperties.Market("   ", "https://api.massive.com", Duration.ofSeconds(15), Duration.ofMillis(500), 0.001);
-        var massive = new FinallyProperties.Market("key", "https://api.massive.com", Duration.ofSeconds(15), Duration.ofMillis(500), 0.001);
+        var sim = new FinallyProperties.Market("", "https://api.massive.com", Duration.ofSeconds(15), Duration.ofMillis(500), 0.001, "", "https://finnhub.io/api/v1", Duration.ofMillis(1100));
+        var blank = new FinallyProperties.Market("   ", "https://api.massive.com", Duration.ofSeconds(15), Duration.ofMillis(500), 0.001, "", "https://finnhub.io/api/v1", Duration.ofMillis(1100));
+        var massive = new FinallyProperties.Market("key", "https://api.massive.com", Duration.ofSeconds(15), Duration.ofMillis(500), 0.001, "", "https://finnhub.io/api/v1", Duration.ofMillis(1100));
         assertThat(MarketDataConfig.create(sim, cache, b, m)).isInstanceOf(SimulatorMarketDataSource.class);
         assertThat(MarketDataConfig.create(blank, cache, b, m)).isInstanceOf(SimulatorMarketDataSource.class);
         assertThat(MarketDataConfig.create(massive, cache, b, m)).isInstanceOf(MassiveMarketDataSource.class);

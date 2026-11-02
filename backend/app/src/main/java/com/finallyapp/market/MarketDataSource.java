@@ -23,6 +23,6 @@ public interface MarketDataSource {
 
     List<String> getTickers();
 
-    /** "simulator" or "massive". */
+    /** "simulator", "massive" or "finnhub". */
     String name();
 }

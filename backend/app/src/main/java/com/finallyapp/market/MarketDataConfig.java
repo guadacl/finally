@@ -8,7 +8,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestClient;
 
-/** Chooses the market data source: Massive when {@code MASSIVE_API_KEY} is set, otherwise the simulator. */
+/**
+ * Chooses the market data source: Finnhub when {@code FINNHUB_API_KEY} is set, else Massive when
+ * {@code MASSIVE_API_KEY} is set, otherwise the simulator.
+ */
 @Configuration
 public class MarketDataConfig {
 
@@ -22,6 +25,11 @@ public class MarketDataConfig {
 
     public static MarketDataSource create(FinallyProperties.Market cfg, PriceCache cache,
                                           RestClient.Builder builder, ObjectMapper mapper) {
+        if (cfg.useFinnhub()) {
+            log.info("Market data source: Finnhub API (real-time data)");
+            return new FinnhubMarketDataSource(cache, builder, cfg.finnhubBaseUrl(), cfg.finnhubApiKey().trim(),
+                    cfg.finnhubCallSpacing(), mapper);
+        }
         if (cfg.useMassive()) {
             log.info("Market data source: Massive API (real data)");
             return new MassiveMarketDataSource(cache, builder, cfg.massiveBaseUrl(), cfg.massiveApiKey().trim(),

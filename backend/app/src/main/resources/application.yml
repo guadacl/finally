@@ -67,6 +67,9 @@ finally:
     massive-api-key: ${MASSIVE_API_KEY:}
     massive-base-url: ${MASSIVE_BASE_URL:https://api.massive.com}
     massive-poll-interval: ${MASSIVE_POLL_INTERVAL:15s}
+    finnhub-api-key: ${FINNHUB_API_KEY:}
+    finnhub-base-url: ${FINNHUB_BASE_URL:https://finnhub.io/api/v1}
+    finnhub-call-spacing: ${FINNHUB_CALL_SPACING:1100ms}
     simulator-interval: 500ms
     event-probability: 0.001
   stream:

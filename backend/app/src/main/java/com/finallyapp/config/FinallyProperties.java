@@ -25,7 +25,14 @@ public record FinallyProperties(
             @DefaultValue("https://api.massive.com") String massiveBaseUrl,
             @DefaultValue("15s") Duration massivePollInterval,
             @DefaultValue("500ms") Duration simulatorInterval,
-            @DefaultValue("0.001") double eventProbability) {
+            @DefaultValue("0.001") double eventProbability,
+            @DefaultValue("") String finnhubApiKey,
+            @DefaultValue("https://finnhub.io/api/v1") String finnhubBaseUrl,
+            @DefaultValue("1100ms") Duration finnhubCallSpacing) {
+
+        public boolean useFinnhub() {
+            return finnhubApiKey != null && !finnhubApiKey.isBlank();
+        }
 
         public boolean useMassive() {
             return massiveApiKey != null && !massiveApiKey.isBlank();
