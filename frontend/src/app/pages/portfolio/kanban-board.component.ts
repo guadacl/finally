@@ -1,8 +1,8 @@
-import { CdkDrag, CdkDragDrop, CdkDragPlaceholder, CdkDropList, CdkDropListGroup, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
+import { CdkDrag, CdkDragDrop, CdkDragPlaceholder, CdkDropList, CdkDropListGroup, transferArrayItem } from '@angular/cdk/drag-drop';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { COLUMN_LABEL, KANBAN_COLUMNS, KanbanCard, KanbanColumn, errorMessage } from '../../api/models';
-import { KanbanService, validateTargetPrice } from '../../core/kanban.service';
+import { KanbanService, sortByDistance, validateTargetPrice } from '../../core/kanban.service';
 import { PriceStreamService } from '../../core/price-stream.service';
 import { TICKER_PATTERN, normalizeTicker } from '../../core/watchlist.service';
 import { KanbanCardComponent } from './kanban-card.component';
@@ -67,6 +67,7 @@ import { KanbanCardComponent } from './kanban-card.component';
             cdkDropList
             [id]="'kanban-list-' + col"
             [cdkDropListData]="list(col)"
+            cdkDropListSortingDisabled
             (cdkDropListDropped)="drop($event, col)"
             [attr.data-testid]="'kanban-column-' + col"
             class="kanban-list flex min-h-[120px] flex-1 flex-col gap-1.5 overflow-y-auto p-1.5"
@@ -113,8 +114,17 @@ export class KanbanBoardComponent {
   readonly normalized = computed(() => normalizeTicker(this.ticker() ?? ''));
   readonly livePrice = computed(() => (this.normalized() ? this.prices.price(this.normalized()) : null));
 
+  /** Live price of a card (stream first, then the price the server sent with the card). */
+  private readonly priceOf = (card: KanbanCard) => this.prices.state(card.ticker)()?.price ?? card.currentPrice ?? null;
+
+  /** Each column ordered by |DIST| ascending (nearest target first); re-sorts as prices stream in. */
+  private readonly sorted = computed<Record<KanbanColumn, KanbanCard[]>>(() => ({
+    SUPPORT: sortByDistance(this.kanban.support(), this.priceOf),
+    RESISTANCE: sortByDistance(this.kanban.resistance(), this.priceOf),
+  }));
+
   list(col: KanbanColumn): KanbanCard[] {
-    return col === 'SUPPORT' ? this.kanban.support() : this.kanban.resistance();
+    return this.sorted()[col];
   }
 
   create(): void {
@@ -145,16 +155,15 @@ export class KanbanBoardComponent {
 
   drop(event: CdkDragDrop<KanbanCard[]>, target: KanbanColumn): void {
     const source: KanbanColumn = event.previousContainer.id.endsWith('RESISTANCE') ? 'RESISTANCE' : 'SUPPORT';
-    if (source === target && event.previousIndex === event.currentIndex) return;
+    // Order inside a column is automatic (|DIST| ascending): only moves between columns count.
+    if (source === target) return;
     const lists: Record<KanbanColumn, KanbanCard[]> = {
       SUPPORT: [...this.kanban.support()],
       RESISTANCE: [...this.kanban.resistance()],
     };
-    if (source === target) {
-      moveItemInArray(lists[target], event.previousIndex, event.currentIndex);
-    } else {
-      transferArrayItem(lists[source], lists[target], event.previousIndex, event.currentIndex);
-    }
+    const moved = lists[source].findIndex((c) => c.id === (event.item.data as KanbanCard).id);
+    if (moved < 0) return;
+    transferArrayItem(lists[source], lists[target], moved, lists[target].length);
     this.kanban.reorder(lists).subscribe({
       error: () => this.kanban.load(), // resync with the server on failure
     });

@@ -127,13 +127,17 @@ price_alerts(                                     -- V3: Alerts page
 API: GET /api/alerts, POST /api/alerts {ticker, upperLimit?, lowerLimit?, comment?}, DELETE /api/alerts/{id}
 ```
 
+Alerts page behaviour:
+- Each row also shows `rsi`: RSI(14), Wilder smoothing, on daily closes from Massive end-of-day aggregates (`DailyCloses`, ~150 calendar days, one ticker per 20 s, cached per day), with the live price as today's close during the session. `null` without `MASSIVE_API_KEY` or until the history has loaded. UI: ≥ 70 overbought, ≤ 30 oversold.
+- Adding an alert also creates kanban cards: `lowerLimit` → a SUPPORT card, `upperLimit` → a RESISTANCE card (frontend, via `POST /api/kanban`; deleting the alert leaves the cards).
+
 Indexes: `trades(user_id, executed_at)`, `portfolio_snapshots(user_id, recorded_at)`, `chat_messages(user_id, created_at)`, `kanban_cards(user_id, column_name, sort_order)`.
 
 Seed (a separate migration, idempotent with `ON CONFLICT DO NOTHING`): profile `default` with 10000 cash; watchlist AAPL, GOOGL, MSFT, AMZN, TSLA, NVDA, META, JPM, V, NFLX. No seeded kanban cards.
 
 ## 5. Kanban & alert rules
 
-- **Display names**: column `SUPPORT` is shown to users as **Stop Loss**, `RESISTANCE` as **Take Profit** (UI labels and notification texts). The codes in the API, database and Camunda process are unchanged.
+- **Display names**: column `SUPPORT` is shown to users as **Support**, `RESISTANCE` as **Resistance** (UI labels and notification texts). The codes in the API, database and Camunda process are unchanged. The board is shown on both the **Portfolio** and the **Alerts** page (same cards; the Alerts page shows it below the upper/lower-limit alerts list).
 - A card is `(ticker, column ∈ {SUPPORT, RESISTANCE}, targetPrice)`. One ticker may have several cards. The ticker does not need to be on the watchlist; creating a card adds the ticker to the price source so it gets live prices (same mechanism as watchlist add).
 - Alert trigger: SUPPORT fires when `price <= target`; RESISTANCE fires when `price >= target`.
 - Fire only when `armed = true`; then set `armed = false`. Re-arm (`armed = true`) when the condition becomes false again, when the target price is edited, or when the card moves column.

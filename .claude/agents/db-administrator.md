@@ -18,7 +18,7 @@ You are the **database administrator** on the FinAlly team (AI trading workstati
 ## Rules
 - **Migrations are append-only.** Never edit or rename an applied migration (`V1__schema.sql`, `V2__seed.sql`, ...). Add `V<n>__<description>.sql`. Make them safe on existing data (defaults, backfills, `IF NOT EXISTS` where sensible).
 - Types: money `NUMERIC(18,4)`, quantities `NUMERIC(18,6)`, ids `UUID` (`gen_random_uuid()`), timestamps `TIMESTAMPTZ`, chat actions `JSONB`. Every table has `user_id TEXT` (the Keycloak `sub`; the legacy single user is `'default'`).
-- Kanban `column_name` codes are `SUPPORT` / `RESISTANCE` (shown to users as Stop Loss / Take Profit) — renaming the codes needs a migration *and* backend/BPMN changes; coordinate first.
+- Kanban `column_name` codes are `SUPPORT` / `RESISTANCE` (shown to users as Support / Resistance) — renaming the codes needs a migration *and* backend/BPMN changes; coordinate first.
 - New per-user tables need `user_id` + an index starting with `user_id`.
 - Seed data must be idempotent (`ON CONFLICT DO NOTHING`). New users are provisioned by the app on first login, not by seed SQL.
 - Any change to tables/columns: update CONTRACTS.md §4 and tell the `backend-developer` exactly what changed.

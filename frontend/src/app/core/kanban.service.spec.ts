@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { isObservable } from 'rxjs';
 import { KanbanCard } from '../api/models';
-import { KanbanService, targetHint, validateTargetPrice } from './kanban.service';
+import { KanbanService, cardDistance, sortByDistance, targetHint, validateTargetPrice } from './kanban.service';
 
 const card = (id: string, column: KanbanCard['column'], sortOrder: number, targetPrice = 100): KanbanCard => ({
   id,
@@ -35,6 +35,28 @@ describe('kanban validation', () => {
     expect(targetHint('SUPPORT', 180, 190)).toBeNull();
     expect(targetHint('RESISTANCE', 180, 190)).toContain('below');
     expect(targetHint('RESISTANCE', 200, null)).toBeNull();
+  });
+});
+
+describe('sortByDistance', () => {
+  it('computes DIST as % from price to target', () => {
+    expect(cardDistance(90, 100)).toBeCloseTo(-10);
+    expect(cardDistance(110, 100)).toBeCloseTo(10);
+    expect(cardDistance(110, null)).toBeNull();
+  });
+
+  it('orders by |DIST| ascending (nearest target first), cards without a price last, ties in saved order', () => {
+    const prices: Record<string, number | null> = { a: 100, b: 100, c: null, d: 100, e: 100, f: 100 };
+    const cards = [
+      card('c', 'SUPPORT', 0, 50),
+      card('a', 'SUPPORT', 1, 95),
+      card('b', 'SUPPORT', 2, 70),
+      card('d', 'SUPPORT', 3, 105),
+      card('e', 'SUPPORT', 4, 120),
+      card('f', 'SUPPORT', 5, 98),
+    ];
+    const ids = sortByDistance(cards, (c) => prices[c.id]).map((c) => c.id);
+    expect(ids).toEqual(['f', 'a', 'd', 'e', 'b', 'c']); // 2%, 5%, 5% (tie, saved order), 20%, 30%, no price
   });
 });
 

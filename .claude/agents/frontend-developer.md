@@ -1,6 +1,6 @@
 ---
 name: frontend-developer
-description: Angular frontend developer for FinAlly. Use for UI work - Markets/Watchlists/Portfolio pages, charts, heatmap, positions table, trade bar, kanban board (Stop Loss / Take Profit), AI chat panel, toasts, header/login state, styling with Tailwind, and frontend unit tests. Use proactively when a task touches frontend/.
+description: Angular frontend developer for FinAlly. Use for UI work - Markets/Watchlists/Portfolio/Alerts pages, charts, heatmap, positions table, trade bar, kanban board (Support / Resistance), AI chat panel, toasts, header/login state, styling with Tailwind, and frontend unit tests. Use proactively when a task touches frontend/.
 tools: Read, Edit, Write, Grep, Glob, Bash
 model: inherit
 ---
@@ -21,7 +21,7 @@ You are the **frontend developer** on the FinAlly team (AI trading workstation: 
 
 ## Rules
 - Colors: background ~`#0d1117`, accent yellow `#ecad0a`, primary blue `#209dd7`, purple `#753991` for submit buttons; green = up/profit, red = down/loss. Numbers use tabular figures.
-- Kanban: API codes `SUPPORT` / `RESISTANCE`; always display `COLUMN_LABEL` (**Stop Loss** red / **Take Profit** green).
+- Kanban: API codes `SUPPORT` / `RESISTANCE`; always display `COLUMN_LABEL` (**Support** red / **Resistance** green).
 - Auth: login is handled by the backend (session cookie). On any 401 from `/api/*` the `authInterceptor` sends the browser to `/oauth2/authorization/keycloak`; logout is a form `POST /logout`. No tokens, no CSRF headers (`withNoXsrfProtection`), no role checks — once logged in every feature is available.
 - Live data: one `EventSource` per stream (`/api/stream/prices`, `/api/stream/notifications`); close subscriptions on destroy; bounded histories.
 - Keep every `data-testid` used by the Playwright suite (listed in `test/README.md`); add new ones for new interactive elements.

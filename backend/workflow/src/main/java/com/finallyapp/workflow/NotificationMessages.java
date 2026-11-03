@@ -21,11 +21,11 @@ public final class NotificationMessages {
     /**
      * Examples:
      * <ul>
-     *   <li>CARD_CREATED: {@code New Stop Loss card: AAPL @ 185.00}</li>
-     *   <li>CARD_MOVED: {@code AAPL moved to Take Profit @ 200.00}</li>
-     *   <li>TARGET_HIT: {@code AAPL hit stop loss 185.00 (now 184.97)}</li>
+     *   <li>CARD_CREATED: {@code New Support card: AAPL @ 185.00}</li>
+     *   <li>CARD_MOVED: {@code AAPL moved to Resistance @ 200.00}</li>
+     *   <li>TARGET_HIT: {@code AAPL hit support 185.00 (now 184.97)}</li>
      * </ul>
-     * Display names: column {@code SUPPORT} is shown as "Stop Loss", {@code RESISTANCE} as "Take Profit".
+     * Display names: column {@code SUPPORT} is shown as "Support", {@code RESISTANCE} as "Resistance".
      */
     public static String format(NotificationType type, String ticker, KanbanColumn column,
                                 BigDecimal targetPrice, BigDecimal price) {
@@ -51,8 +51,8 @@ public final class NotificationMessages {
             return "?";
         }
         return switch (column) {
-            case SUPPORT -> "Stop Loss";
-            case RESISTANCE -> "Take Profit";
+            case SUPPORT -> "Support";
+            case RESISTANCE -> "Resistance";
         };
     }
 

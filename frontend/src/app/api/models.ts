@@ -24,6 +24,8 @@ export interface PriceAlert {
   lastSessionVolume?: number | null;
   /** Trading day of lastSessionVolume, e.g. "2026-11-02". */
   lastSessionDate?: string | null;
+  /** RSI(14) on daily closes, live price as today's close during the session (null without a Massive key). */
+  rsi?: number | null;
   createdAt: string;
 }
 
@@ -170,11 +172,11 @@ export const KANBAN_COLUMNS: readonly KanbanColumn[] = ['SUPPORT', 'RESISTANCE']
 
 /**
  * User-facing column names. The API codes stay SUPPORT / RESISTANCE:
- * a Stop Loss alerts when the price falls to the target, a Take Profit when it rises to it.
+ * a Support card alerts when the price falls to the target, a Resistance card when it rises to it.
  */
 export const COLUMN_LABEL: Readonly<Record<KanbanColumn, string>> = {
-  SUPPORT: 'Stop Loss',
-  RESISTANCE: 'Take Profit',
+  SUPPORT: 'Support',
+  RESISTANCE: 'Resistance',
 };
 
 export interface KanbanCard {

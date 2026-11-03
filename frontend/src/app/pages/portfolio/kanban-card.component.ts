@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
 import { isObservable } from 'rxjs';
 import { KanbanCard, errorMessage } from '../../api/models';
-import { KanbanService, targetHint } from '../../core/kanban.service';
+import { KanbanService, cardDistance, targetHint } from '../../core/kanban.service';
 import { PriceStreamService } from '../../core/price-stream.service';
 import { PctPipe, PricePipe } from '../../shared/format';
 import { PriceFlashDirective } from '../../shared/price-flash.directive';
@@ -55,7 +55,7 @@ import { PriceFlashDirective } from '../../shared/price-flash.directive';
         <span class="num text-muted">{{ distance() | pct }}</span>
       </div>
       <label class="flex flex-col items-end">
-        <span class="text-[9px] tracking-widest text-muted uppercase">{{ card().column === 'SUPPORT' ? 'Stop at' : 'Take at' }}</span>
+        <span class="text-[9px] tracking-widest text-muted uppercase">Target</span>
         <input
           #priceInput
           class="field num w-24 py-0.5 text-right"
@@ -90,10 +90,7 @@ export class KanbanCardComponent {
   readonly busy = signal(false);
 
   readonly livePrice = computed(() => this.prices.state(this.card().ticker)()?.price ?? this.card().currentPrice ?? null);
-  readonly distance = computed(() => {
-    const p = this.livePrice();
-    return p ? ((this.card().targetPrice - p) / p) * 100 : null;
-  });
+  readonly distance = computed(() => cardDistance(this.card().targetPrice, this.livePrice()));
   readonly hint = computed(() => targetHint(this.card().column, this.card().targetPrice, this.livePrice()));
 
   constructor() {

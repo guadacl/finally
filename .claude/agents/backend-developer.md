@@ -21,7 +21,7 @@ You are the **backend developer** on the FinAlly team (AI trading workstation). 
 - Money is `BigDecimal` / `NUMERIC`, never `double`. Trades run in one transaction (`FOR UPDATE` on cash) and write a snapshot.
 - Every user's data is keyed by the Keycloak subject: read it with `CurrentUser.id()`; background jobs use `CurrentUser.runAs(userId, ...)`. Never hard-code `"default"`.
 - Security: login required (OIDC "backend for frontend", session cookie `FINALLY_SESSION`); after login there are **no extra restrictions** — CSRF is disabled on purpose (SameSite=Lax cookie). `/api/**` without session → 401 JSON; `/api/health` is public. Don't add role checks unless asked.
-- Kanban column codes stay `SUPPORT` / `RESISTANCE`; users see **Stop Loss** / **Take Profit** (`NotificationMessages.label`).
+- Kanban column codes stay `SUPPORT` / `RESISTANCE`; users see **Support** / **Resistance** (`NotificationMessages.label`).
 - Notifications carry `userId` and go only to the owner's SSE stream. Camunda calls must never throw to the caller (fallback = publish directly).
 - Market data priority: `FINNHUB_API_KEY` → `MASSIVE_API_KEY` → simulator.
 - Errors are always `{error, message}` JSON.

@@ -17,14 +17,33 @@ export function validateTargetPrice(raw: string | number | null | undefined): Pr
 }
 
 /**
- * Hint (non-blocking): stop-loss targets normally sit below the current price,
- * take-profit targets above it.
+ * Hint (non-blocking): support targets normally sit below the current price,
+ * resistance targets above it.
  */
 export function targetHint(column: KanbanColumn, target: number, price: number | null | undefined): string | null {
   if (price == null) return null;
-  if (column === 'SUPPORT' && target > price) return 'Stop loss is above the current price';
-  if (column === 'RESISTANCE' && target < price) return 'Take profit is below the current price';
+  if (column === 'SUPPORT' && target > price) return 'Support is above the current price';
+  if (column === 'RESISTANCE' && target < price) return 'Resistance is below the current price';
   return null;
+}
+
+/** DIST shown on a card: % from the current price to the target (negative = target below price). */
+export function cardDistance(target: number, price: number | null | undefined): number | null {
+  return price ? ((target - price) / price) * 100 : null;
+}
+
+/**
+ * Column display order: |DIST| ascending, so the card closest to its target (to triggering) is on
+ * top, whichever side of the price it sits. Cards without a price go last; ties keep the saved order.
+ */
+export function sortByDistance(cards: readonly KanbanCard[], priceOf: (card: KanbanCard) => number | null | undefined): KanbanCard[] {
+  return cards
+    .map((card, i) => {
+      const d = cardDistance(card.targetPrice, priceOf(card));
+      return { card, i, d: d == null ? null : Math.abs(d) };
+    })
+    .sort((a, b) => (a.d == null ? 1 : 0) - (b.d == null ? 1 : 0) || (a.d ?? 0) - (b.d ?? 0) || a.i - b.i)
+    .map((x) => x.card);
 }
 
 function sortCards(cards: KanbanCard[]): KanbanCard[] {

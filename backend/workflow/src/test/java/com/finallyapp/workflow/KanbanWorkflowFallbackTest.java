@@ -45,7 +45,7 @@ class KanbanWorkflowFallbackTest {
         assertThat(key).isNull();
         assertThat(published).singleElement().satisfies(n -> {
             assertThat(n.type()).isEqualTo(NotificationType.CARD_CREATED);
-            assertThat(n.message()).isEqualTo("New Stop Loss card: AAPL @ 185.00");
+            assertThat(n.message()).isEqualTo("New Support card: AAPL @ 185.00");
         });
     }
 
@@ -60,7 +60,7 @@ class KanbanWorkflowFallbackTest {
         workflow.cardDeleted(card.id());
 
         assertThat(published).extracting(Notification::message).containsExactly(
-                "AAPL hit stop loss 185.00 (now 184.97)", "AAPL moved to Take Profit @ 200.00");
+                "AAPL hit support 185.00 (now 184.97)", "AAPL moved to Resistance @ 200.00");
     }
 
     @Test

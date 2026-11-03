@@ -273,7 +273,7 @@ class AppIntegrationTest {
     void notificationStreamDeliversPublishedNotifications() throws Exception {
         Notification n = Notification.of(NotificationType.TARGET_HIT,
                 new KanbanCardRef(UUID.randomUUID(), "AAPL", KanbanColumn.SUPPORT, new BigDecimal("185"), "default"),
-                new BigDecimal("184.97"), "AAPL hit stop loss 185.00 (now 184.97)");
+                new BigDecimal("184.97"), "AAPL hit support 185.00 (now 184.97)");
         List<String> lines = readSse("/api/stream/notifications", 3, () -> {
             // publish repeatedly until the client is registered
             CompletableFuture.runAsync(() -> {

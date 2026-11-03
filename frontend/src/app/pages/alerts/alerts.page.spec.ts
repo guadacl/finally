@@ -7,8 +7,9 @@ import { fakeEventSourceFactory } from '../../../testing/fake-event-source';
 import { WatchlistItem } from '../../api/models';
 import { EVENT_SOURCE_FACTORY } from '../../core/event-source';
 import { PriceStreamService } from '../../core/price-stream.service';
+import { ToastService } from '../../core/toast.service';
 import { WatchlistService } from '../../core/watchlist.service';
-import { AlertsPage } from './alerts.page';
+import { AlertsPage, rsiZone } from './alerts.page';
 
 const wl = (ticker: string): WatchlistItem => ({ ticker, addedAt: '2026-11-03T10:00:00Z' });
 
@@ -66,11 +67,70 @@ describe('AlertsPage', () => {
       { status: 201, statusText: 'Created' });
     await fixture.whenStable();
 
+    // the lower limit becomes a Support card, the upper limit a Resistance card
+    const cardPosts = http.match({ method: 'POST', url: '/api/kanban' });
+    expect(cardPosts.map((r) => r.request.body)).toEqual([
+      { ticker: 'MSFT', column: 'SUPPORT', targetPrice: 450 },
+      { ticker: 'MSFT', column: 'RESISTANCE', targetPrice: 600 },
+    ]);
+    cardPosts.forEach((r, i) =>
+      r.flush({ id: 'k' + i, ...r.request.body, sortOrder: i, armed: true, createdAt: '2026-11-03T10:00:00Z', updatedAt: '2026-11-03T10:00:00Z' },
+        { status: 201, statusText: 'Created' }));
+    await fixture.whenStable();
+    expect(q(root, 'kanban-column-SUPPORT')!.textContent).toContain('MSFT');
+    expect(q(root, 'kanban-column-RESISTANCE')!.textContent).toContain('MSFT');
+
     expect(q(root, 'alerts-form')).toBeNull();
     const row = q(root, 'alerts-row-x1')!;
     expect(row.textContent).toContain('MSFT');
     expect(row.textContent).toContain('earnings week');
     expect(row.getAttribute('data-status')).toBe('inside');
+  });
+
+  it('creates only the card for the limit that was set', async () => {
+    const fixture = TestBed.createComponent(AlertsPage);
+    fixture.detectChanges();
+    http.expectOne('/api/alerts').flush([]);
+    const root: HTMLElement = fixture.nativeElement;
+    q(root, 'alerts-add-button')!.click();
+    await fixture.whenStable();
+    type(q(root, 'alerts-ticker'), 'AAPL');
+    type(q(root, 'alerts-upper'), '400');
+    await fixture.whenStable();
+    (q(root, 'alerts-form') as HTMLFormElement).dispatchEvent(new Event('submit'));
+    http.expectOne({ method: 'POST', url: '/api/alerts' })
+      .flush({ id: 'u1', ticker: 'AAPL', upperLimit: 400, createdAt: '2026-11-03T10:00:00Z' }, { status: 201, statusText: 'Created' });
+    await fixture.whenStable();
+    const card = http.expectOne({ method: 'POST', url: '/api/kanban' });
+    expect(card.request.body).toEqual({ ticker: 'AAPL', column: 'RESISTANCE', targetPrice: 400 });
+    card.flush(null, { status: 500, statusText: 'Server Error' });
+    await fixture.whenStable();
+    // the alert stays; the failed card is reported as a toast
+    expect(q(root, 'alerts-row-u1')).not.toBeNull();
+    expect(TestBed.inject(ToastService).toasts().at(-1)?.message).toContain('Resistance card could not be created');
+  });
+
+  it('shows RSI(14) coloured by zone, and a dash when unknown', async () => {
+    const fixture = TestBed.createComponent(AlertsPage);
+    fixture.detectChanges();
+    const base = { lowerLimit: 1, createdAt: '2026-11-03T10:00:00Z' };
+    http.expectOne('/api/alerts').flush([
+      { ...base, id: 'r1', ticker: 'AAPL', rsi: 74.25 },
+      { ...base, id: 'r2', ticker: 'MSFT', rsi: 28 },
+      { ...base, id: 'r3', ticker: 'NVDA', rsi: 50 },
+      { ...base, id: 'r4', ticker: 'TSLA' },
+    ]);
+    await fixture.whenStable();
+    const root: HTMLElement = fixture.nativeElement;
+    const cell = (id: string) => q(root, 'alerts-rsi-' + id)!;
+    expect(cell('r1').textContent!.trim()).toBe('74.3');
+    expect(cell('r1').className).toContain('text-down');
+    expect(cell('r2').textContent!.trim()).toBe('28.0');
+    expect(cell('r2').className).toContain('text-up');
+    expect(cell('r3').className).toContain('text-muted');
+    expect(cell('r4').textContent!.trim()).toBe('—');
+    expect(cell('r4').getAttribute('title')).toContain('Massive');
+    expect([rsiZone(70), rsiZone(30), rsiZone(30.1), rsiZone(null)]).toEqual(['overbought', 'oversold', 'neutral', 'unknown']);
   });
 
   it('shows validation errors without calling the API', async () => {

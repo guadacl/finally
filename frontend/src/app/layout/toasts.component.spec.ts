@@ -15,7 +15,7 @@ const hit: Notification = {
   column: 'SUPPORT',
   targetPrice: 185,
   price: 184.97,
-  message: 'AAPL hit stop loss 185.00 (now 184.97)',
+  message: 'AAPL hit support 185.00 (now 184.97)',
   createdAt: '2026-11-02T10:00:00Z',
 };
 
@@ -38,8 +38,8 @@ describe('ToastsComponent', () => {
     expect(els[0].textContent).toContain('185.00');
     expect(els[0].textContent).toContain('184.97');
     expect(els[0].className).toContain('border-accent');
-    expect(els[0].textContent).toContain('Stop Loss');
-    expect(els[1].textContent).toContain('Take Profit');
+    expect(els[0].textContent).toContain('Support');
+    expect(els[1].textContent).toContain('Resistance');
     expect(els[0].textContent).not.toContain('SUPPORT');
 
     vi.advanceTimersByTime(TOAST_DURATION_MS - 1000);

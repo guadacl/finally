@@ -5,6 +5,7 @@ import com.finallyapp.api.model.PriceAlertCreate;
 import com.finallyapp.config.Tickers;
 import com.finallyapp.error.ApiException;
 import com.finallyapp.error.ErrorCodes;
+import com.finallyapp.market.DailyCloses;
 import com.finallyapp.market.DayRangeCache;
 import com.finallyapp.market.LastSessionVolumes;
 import com.finallyapp.market.PriceCache;
@@ -44,14 +45,16 @@ public class PriceAlertService {
     private final TickerTracker tracker;
     private final DayRangeCache dayRanges;
     private final LastSessionVolumes volumes;
+    private final DailyCloses dailyCloses;
 
     public PriceAlertService(JdbcClient jdbc, PriceCache cache, TickerTracker tracker, DayRangeCache dayRanges,
-                             LastSessionVolumes volumes) {
+                             LastSessionVolumes volumes, DailyCloses dailyCloses) {
         this.jdbc = jdbc;
         this.cache = cache;
         this.tracker = tracker;
         this.dayRanges = dayRanges;
         this.volumes = volumes;
+        this.dailyCloses = dailyCloses;
     }
 
     public List<PriceAlert> list() {
@@ -131,13 +134,16 @@ public class PriceAlertService {
     }
 
     private PriceAlert toDto(Row r) {
+        BigDecimal price = cache.price(r.ticker());
         PriceAlert dto = new PriceAlert(r.id(), r.ticker(), r.createdAt())
                 .upperLimit(strip(r.upper()))
                 .lowerLimit(strip(r.lower()))
                 .comment(r.comment())
-                .currentPrice(cache.price(r.ticker()));
+                .currentPrice(price);
         dayRanges.get(r.ticker()).ifPresent(d -> dto.dayHigh(d.high()).dayLow(d.low()));
         volumes.get(r.ticker()).ifPresent(v -> dto.lastSessionVolume(v.volume()).lastSessionDate(v.session()));
+        dailyCloses.rsi(r.ticker(), price)
+                .ifPresent(v -> dto.rsi(BigDecimal.valueOf(v).setScale(1, RoundingMode.HALF_UP)));
         return dto;
     }
 

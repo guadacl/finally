@@ -79,8 +79,8 @@ class WorkflowWiringTest {
 
             await().atMost(Duration.ofSeconds(5)).untilAsserted(() ->
                     assertThat(TestApp.PUBLISHED).extracting(Notification::message).containsExactlyInAnyOrder(
-                            "New Take Profit card: NVDA @ 900.00",
-                            "NVDA hit take profit 900.00 (now 901.50)"));
+                            "New Resistance card: NVDA @ 900.00",
+                            "NVDA hit resistance 900.00 (now 901.50)"));
         }
     }
 }
