@@ -5,6 +5,9 @@
 # Infrastructure services live in included files so each build agent owns its own service:
 #   db/compose.postgres.yml       -> service `postgres`  (DB agent)
 #   camunda/compose.camunda.yml   -> service `camunda`   (Camunda agent)
+#   keycloak/compose.keycloak.yml -> service `keycloak`  (login, http://localhost:8180)
+#   mailpit/compose.mailpit.yml   -> service `mailpit`   (catches alert emails, http://localhost:8025)
+#   mcp/email-mcp-server/compose.email-mcp.yml -> service `email-mcp` (MCP send_email tool -> SMTP, internal)
 
 name: finally
 
@@ -12,6 +15,8 @@ include:
   - db/compose.postgres.yml
   - camunda/compose.camunda.yml
   - keycloak/compose.keycloak.yml
+  - mailpit/compose.mailpit.yml
+  - mcp/email-mcp-server/compose.email-mcp.yml
 
 services:
   app:
@@ -34,6 +39,11 @@ services:
       KEYCLOAK_URL: http://localhost:${KEYCLOAK_HOST_PORT:-8180}
       KEYCLOAK_INTERNAL_URL: http://keycloak:8080
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-finally-dev-secret}
+      # Target-price-hit alert emails: Camunda "email-notify" task -> MCP tool send_email on the email-mcp service
+      # -> SMTP (bundled Mailpit by default, read them at http://localhost:8025). SMTP settings live on email-mcp.
+      MAIL_ENABLED: ${MAIL_ENABLED:-true}
+      EMAIL_MCP_URL: ${EMAIL_MCP_URL:-http://email-mcp:3001/mcp}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:${APP_PORT:-8000}}
     ports:
       - "${APP_PORT:-8000}:8000"   # set APP_PORT in .env if 8000 is taken on the host
     depends_on:
@@ -43,6 +53,9 @@ services:
         condition: service_healthy
       # the app starts without Keycloak (no discovery at boot); logins work once Keycloak is up
       keycloak:
+        condition: service_started
+      # alert emails are best effort: the app runs (and keeps alerting in the browser) without the mail services
+      email-mcp:
         condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8000/api/health || exit 1"]

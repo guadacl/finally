@@ -596,7 +596,7 @@ components:
 
     NotificationType:
       type: string
-      enum: [CARD_CREATED, CARD_MOVED, TARGET_HIT]
+      enum: [CARD_CREATED, CARD_MOVED, TARGET_HIT, CARD_DELETED]
 
     Notification:
       type: object

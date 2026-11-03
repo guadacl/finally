@@ -54,6 +54,11 @@ public class NotifyJobWorker {
     }
 
     static Notification toNotification(ActivatedJob job) {
+        return toNotification(job, "finally-notify:");
+    }
+
+    /** {@code idPrefix} keeps ids of different job types apart while staying stable across re-deliveries. */
+    static Notification toNotification(ActivatedJob job, String idPrefix) {
         Map<String, Object> vars = job.getVariablesAsMap();
         Map<String, String> headers = job.getCustomHeaders();
         String typeName = headers == null ? null : headers.get(KanbanProcess.HEADER_NOTIFICATION_TYPE);
@@ -72,7 +77,7 @@ public class NotifyJobWorker {
         BigDecimal targetPrice = toDecimal(vars.get(KanbanProcess.VAR_TARGET_PRICE));
         BigDecimal price = type == NotificationType.TARGET_HIT ? toDecimal(vars.get(KanbanProcess.VAR_PRICE)) : null;
 
-        UUID id = UUID.nameUUIDFromBytes(("finally-notify:" + job.getKey()).getBytes(StandardCharsets.UTF_8));
+        UUID id = UUID.nameUUIDFromBytes((idPrefix + job.getKey()).getBytes(StandardCharsets.UTF_8));
         String message = NotificationMessages.format(type, ticker, column, targetPrice, price);
         Object owner = vars.get(KanbanProcess.VAR_USER_ID);
         return new Notification(id, type, cardId, ticker, column, targetPrice, price, message, Instant.now(),

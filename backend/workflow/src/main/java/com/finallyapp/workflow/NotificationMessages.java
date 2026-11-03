@@ -24,6 +24,7 @@ public final class NotificationMessages {
      *   <li>CARD_CREATED: {@code New Support card: AAPL @ 185.00}</li>
      *   <li>CARD_MOVED: {@code AAPL moved to Resistance @ 200.00}</li>
      *   <li>TARGET_HIT: {@code AAPL hit support 185.00 (now 184.97)}</li>
+     *   <li>CARD_DELETED: {@code Support card deleted: AAPL @ 185.00}</li>
      * </ul>
      * Display names: column {@code SUPPORT} is shown as "Support", {@code RESISTANCE} as "Resistance".
      */
@@ -34,6 +35,7 @@ public final class NotificationMessages {
         return switch (type) {
             case CARD_CREATED -> "New " + col + " card: " + t + " @ " + money(targetPrice);
             case CARD_MOVED -> t + " moved to " + col + " @ " + money(targetPrice);
+            case CARD_DELETED -> col + " card deleted: " + t + " @ " + money(targetPrice);
             case TARGET_HIT -> t + " hit " + col.toLowerCase(Locale.ROOT) + " " + money(targetPrice)
                     + (price == null ? "" : " (now " + money(price) + ")");
         };
