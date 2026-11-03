@@ -12,8 +12,16 @@ import { PricePipe, VolumePipe } from '../../shared/format';
 import { PriceFlashDirective } from '../../shared/price-flash.directive';
 import { KanbanBoardComponent } from '../portfolio/kanban-board.component';
 
-/** How often the list is reloaded for fresh day high/low and volume. */
+/** How often the list is reloaded for fresh day high/low, volume and RSI. */
 export const REFRESH_MS = 30_000;
+
+export type RsiZone = 'overbought' | 'oversold' | 'neutral' | 'unknown';
+
+/** Classic RSI thresholds: ≥ 70 overbought, ≤ 30 oversold. */
+export function rsiZone(rsi: number | null | undefined): RsiZone {
+  if (rsi == null || !Number.isFinite(rsi)) return 'unknown';
+  return rsi >= 70 ? 'overbought' : rsi <= 30 ? 'oversold' : 'neutral';
+}
 
 const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
   above: { label: 'Above upper', cls: 'bg-up/15 text-up' },
@@ -108,6 +116,7 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
                 <th class="px-3 py-2 text-right" title="Lowest price of the current trading day">Day low</th>
                 <th class="px-3 py-2 text-right" title="Highest price of the current trading day">Day high</th>
                 <th class="px-3 py-2 text-right" title="Shares traded in the last completed trading session">Vol (last session)</th>
+                <th class="px-3 py-2 text-right" title="Relative Strength Index, 14 daily closes (live during the session): ≥ 70 overbought, ≤ 30 oversold">RSI (14)</th>
                 <th class="px-3 py-2 text-right">Lower limit</th>
                 <th class="px-3 py-2 text-right">Upper limit</th>
                 <th class="px-3 py-2 text-left">Status</th>
@@ -125,6 +134,8 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
                   <td class="num px-3 py-2 text-right text-muted" [attr.data-testid]="'alerts-dayhigh-' + a.id">{{ dayRange(a).high | price }}</td>
                   <td class="num px-3 py-2 text-right text-muted" [attr.data-testid]="'alerts-volume-' + a.id"
                     [attr.title]="a.lastSessionDate ? 'Session of ' + (a.lastSessionDate | date: 'EEE d MMM') : 'Volume needs a Massive API key'">{{ a.lastSessionVolume | volume }}</td>
+                  <td class="num px-3 py-2 text-right" [class]="rsiClass(a.rsi)" [attr.data-testid]="'alerts-rsi-' + a.id"
+                    [attr.title]="rsiTitle(a.rsi)">{{ a.rsi != null ? a.rsi.toFixed(1) : '—' }}</td>
                   <td class="num px-3 py-2 text-right text-down">{{ a.lowerLimit != null ? (a.lowerLimit | price) : '—' }}</td>
                   <td class="num px-3 py-2 text-right text-up">{{ a.upperLimit != null ? (a.upperLimit | price) : '—' }}</td>
                   <td class="px-3 py-2">
@@ -245,6 +256,16 @@ export class AlertsPage implements OnInit {
 
   remove(a: PriceAlert): void {
     this.alerts.remove(a.id).subscribe({ error: () => this.alerts.load() });
+  }
+
+  rsiClass(rsi: number | null | undefined): string {
+    return rsiZone(rsi) === 'overbought' ? 'text-down font-semibold' : rsiZone(rsi) === 'oversold' ? 'text-up font-semibold' : 'text-muted';
+  }
+
+  rsiTitle(rsi: number | null | undefined): string {
+    const zone = rsiZone(rsi);
+    if (zone === 'unknown') return 'RSI needs a Massive API key (daily closes); it appears shortly after the alert is added';
+    return zone === 'overbought' ? 'Overbought (RSI ≥ 70)' : zone === 'oversold' ? 'Oversold (RSI ≤ 30)' : 'Neutral (30 < RSI < 70)';
   }
 
   livePrice(a: PriceAlert): number | null {

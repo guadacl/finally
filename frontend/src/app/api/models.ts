@@ -24,6 +24,8 @@ export interface PriceAlert {
   lastSessionVolume?: number | null;
   /** Trading day of lastSessionVolume, e.g. "2026-11-02". */
   lastSessionDate?: string | null;
+  /** RSI(14) on daily closes, live price as today's close during the session (null without a Massive key). */
+  rsi?: number | null;
   createdAt: string;
 }
 

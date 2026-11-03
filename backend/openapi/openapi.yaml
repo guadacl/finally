@@ -579,6 +579,7 @@ components:
         dayLow: { type: number, nullable: true, description: 'Lowest price of the current trading day' }
         lastSessionVolume: { type: integer, format: int64, nullable: true, description: 'Shares traded in the last completed session (Massive end-of-day data; null without a Massive key)' }
         lastSessionDate: { type: string, format: date, nullable: true, description: 'Trading day the volume refers to' }
+        rsi: { type: number, nullable: true, minimum: 0, maximum: 100, description: 'RSI(14), Wilder, on daily closes (Massive end-of-day data) with the live price as today''s close during the session; null without a Massive key or until the history is loaded' }
         createdAt: { type: string, format: date-time }
 
     PriceAlertCreate:
