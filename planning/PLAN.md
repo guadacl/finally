@@ -13,7 +13,11 @@ This is the capstone project for an agentic AI coding course. It is built entire
 
 ### First Launch
 
-The user runs a single Docker command (or a provided start script). A browser opens to `http://localhost:8000` and is sent to the **Keycloak login page**, where they log in or **register** a new account (see `planning/CONTRACTS.md` §11). Each account has its own portfolio, watchlist, kanban board and chat. After logging in they see:
+The user runs a single Docker command (or a provided start script). A browser opens to `http://localhost:8000` and is sent to the **Keycloak login page**, where they log in or **register** a new account (see `planning/CONTRACTS.md` §11). Each account has its own portfolio, watchlist, kanban board and chat.
+
+**Login page**: a custom FinAlly-styled page (Keycloak login theme `finally`, `keycloak/themes/finally/login`) in the dark trading-terminal look: yellow "F" logo, username/email + password, "remember me", "Forgot password?", a purple **Sign in** button, **"or continue with" Google / Facebook** buttons, and "New to FinAlly? Create account". Google and Facebook use Keycloak identity brokering and appear only when their OAuth client ID/secret are configured (`keycloak/README.md`); a social login whose email matches an existing account links to it after the user confirms that account's password. All login logic (passwords, reset, registration, social flow) stays in Keycloak; the theme only changes CSS and texts.
+
+After logging in they see:
 
 - A watchlist of 10 default tickers with live-updating prices in a grid
 - $10,000 in virtual cash
@@ -21,6 +25,8 @@ The user runs a single Docker command (or a provided start script). A browser op
 - An AI chat panel ready to assist
 
 The menu of the web application contain markets watchlists portafolio 
+
+Implemented menu: **Markets** (watchlist + chart + trade bar), **Watchlists** (manage tickers), **Portfolio** (heatmap, value chart, positions, Support/Resistance board) and **Alerts** (price alerts table + Support/Resistance board); the AI chat panel is docked on every page.
 
 
 
@@ -35,8 +41,10 @@ The menu of the web application contain markets watchlists portafolio
 - **In portafolio I want a kamban dashboard to create move delete stocks in 2 separate kamban column callee: support and resistence.Each item in the kamban dashboard must contain a label with real time price name and an editable field that must be a price to buy or to sell.
   - **Target price alerts**: when the live price hits a card's target price, the user receives a notification. A **Support** card triggers when price ≤ target; a **Resistance** card triggers when price ≥ target. Each card notifies once per crossing and re-arms only after the price moves back to the other side of the target (no repeated alerts every tick). Editing the target price re-arms the card. No trade is executed automatically.
   - The backend checks targets against the price cache on every price update. When a target is hit, it publishes a `target-price-hit` message to the card's Camunda process instance, and the process runs the notification task.
+  - **Board details (implemented)**: the board is shown on both the **Portfolio** and the **Alerts** page (same cards). Each card shows the ticker, live price, **DIST** (% from the current price to the target), an inline-editable **target price** and an inline-editable **comment** (≤ 500 chars; Enter or leaving the field saves, Esc cancels; a comment edit does not re-arm the card). Each column is ordered by |DIST| ascending, so the card closest to triggering is on top, and re-sorts live; cards without a price go last. Drag & drop moves a card between columns (order inside a column is automatic). A **Resistance** card whose target is already below the current price is highlighted with an accent-yellow border and glow.
   - **Notification channel: in-app pop-up (toast)** in the browser. The Camunda notification task is handled by a Spring job worker that pushes a `notification` event to the browser over SSE (`/api/stream/notifications`). The frontend shows it as a toast in the top-right corner (ticker, column, target price, current price), auto-dismissing after ~6 seconds, styled with the dark theme (Accent Yellow border for alerts). The same channel delivers the "card created" notification from the Camunda gateway. Toasts only reach an open browser tab.
   - **Emails**: in addition to the toast, the card owner gets a plain-text email at their Keycloak account address when a Support/Resistance card is **created**, **deleted**, or **hits its target** (not when it is moved), with ticker, Support/Resistance, target price, current price (target hit), time and a link to `/alerts`. Emails go **through Camunda**: after each of those toast tasks, the `kanban-card` process runs a "Send email" service task (job type `email-notify`); its Spring job worker calls the `send_email` tool of the **email MCP server** (`mcp/email-mcp-server`, compose service `email-mcp`, MCP over Streamable HTTP), which delivers it over SMTP to any provider (SendGrid, Brevo, Mailgun, ... via `MAIL_*` in `.env`). Without provider settings a local **Mailpit** catch-all receives them (web UI `http://localhost:8025`). When Camunda is down, the fallback still sends each toast and email once. Mail failures never affect the toast or the workflow. No Slack or OS-level notification.
+- **Use the Alerts page** — a **price alerts** table: pick a watchlist stock and set a lower and/or upper limit (plus an optional comment). Each row shows ticker, live price, day low / day high, last-session volume, **RSI (14)** (Wilder, on daily closes, live during the session; ≥ 70 overbought in red, ≤ 30 oversold in green, "—" without a Massive key), lower and upper limit, status (in range / above upper / below lower) and when it was added. Adding an alert also creates a **Support** card at the lower limit and a **Resistance** card at the upper limit, carrying the alert's comment (deleting the alert keeps the cards). The comment is shown on the cards, not in the alerts table. The Support / Resistance board is shown below the table.
 - **Chat with the AI assistant** — ask about their portfolio, get analysis, and have the AI execute trades and manage the watchlist through natural language
 - **Manage the watchlist** — add/remove tickers manually or via the AI chat
 
@@ -84,7 +92,18 @@ The whole stack is started with a single `docker compose up`. The browser only t
 - **workflow**: Andled using Camunda. For instance when you create a new stock in Kamunda dashboard the column SUPPORT of RESISTENCE status must be in the Camunda workflow, In Camunda create a gateway that send notification when I create a new task/stock in the kamban dashboard. Camunda must run as docker container
 - **Real-time data**: Server-Sent Events (SSE) — simpler than WebSockets, one-way server→client push, works everywhere
 - **AI integration**: LiteLLM → OpenRouter (Cerebras for fast inference), with structured outputs for trade execution
-- **Market data**: Environment-variable driven — simulator by default, real data via Massive API if key provided
+- **Market data**: Environment-variable driven — simulator by default, real data via Massive API if key provided (implemented: Finnhub real-time quotes take priority when `FINNHUB_API_KEY` is set; Massive end-of-day data also supplies last-session volume and the daily closes for the RSI)
+
+**Services as implemented** (the diagram above shows the original three; `docker-compose.yml` includes one compose file per service):
+
+| Service | Purpose |
+|---|---|
+| `app` | Spring Boot: REST + SSE, market data, AI chat, Camunda job workers (`finally-notify`, `email-notify`), serves the Angular build |
+| `postgres` | Postgres 16 (Flyway migrations V1–V5) |
+| `camunda` + `camunda-elasticsearch` | Camunda 8.8 with Operate/Tasklist; runs the `kanban-card` BPMN |
+| `keycloak` | Keycloak 26: login/registration, Google/Facebook brokering, FinAlly login theme |
+| `email-mcp` | Email MCP server (`send_email` tool over Streamable HTTP) relaying to the SMTP provider |
+| `mailpit` | Local mail catcher used when no SMTP provider is configured |
 
 ### Why These Choices
 
@@ -396,8 +415,12 @@ The frontend is a single-page application with a dense, terminal-inspired layout
 | `app` | built from `Dockerfile` | `8000:8000` | — | `env_file: .env`; `depends_on` postgres and camunda (healthy) |
 | `postgres` | `postgres:16` | internal only (optionally `5432:5432` for dev) | `finally-pgdata:/var/lib/postgresql/data` | healthcheck `pg_isready` |
 | `camunda` | Camunda 8 Run | internal 26500 / 8080; `8081` for the Operate UI (optional) | `finally-camunda` | healthcheck on its REST status endpoint |
+| `camunda-elasticsearch` | `elasticsearch:8.19` | internal only | `finally-camunda-es` | secondary storage for Operate/Tasklist |
+| `keycloak` | `quay.io/keycloak/keycloak:26.8.1` | `127.0.0.1:8180` | `finally-keycloak` | realm import from `keycloak/realm`, login theme mounted from `keycloak/themes/finally`; Google/Facebook client IDs from `.env` |
+| `email-mcp` | built from `mcp/email-mcp-server` | internal `3001` (`/mcp`, `/health`) | — | receives only the `MAIL_*` settings; depends on mailpit |
+| `mailpit` | `axllent/mailpit:v1.27` | `127.0.0.1:8025` (web), `127.0.0.1:1025` (SMTP) | — | local catch-all; not used once an SMTP provider is set |
 
-The `app` service reaches the others by service name (`jdbc:postgresql://postgres:5432/finally`, `camunda:26500`).
+The `app` service reaches the others by service name (`jdbc:postgresql://postgres:5432/finally`, `camunda:26500`, `http://keycloak:8080`, `http://email-mcp:3001/mcp`).
 
 ### Multi-Stage Dockerfile (app service)
 
