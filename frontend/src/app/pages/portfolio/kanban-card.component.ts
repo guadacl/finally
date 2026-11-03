@@ -55,7 +55,7 @@ import { PriceFlashDirective } from '../../shared/price-flash.directive';
         <span class="num text-muted">{{ distance() | pct }}</span>
       </div>
       <label class="flex flex-col items-end">
-        <span class="text-[9px] tracking-widest text-muted uppercase">{{ card().column === 'SUPPORT' ? 'Stop at' : 'Take at' }}</span>
+        <span class="text-[9px] tracking-widest text-muted uppercase">Target</span>
         <input
           #priceInput
           class="field num w-24 py-0.5 text-right"

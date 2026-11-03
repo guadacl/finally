@@ -170,11 +170,11 @@ export const KANBAN_COLUMNS: readonly KanbanColumn[] = ['SUPPORT', 'RESISTANCE']
 
 /**
  * User-facing column names. The API codes stay SUPPORT / RESISTANCE:
- * a Stop Loss alerts when the price falls to the target, a Take Profit when it rises to it.
+ * a Support card alerts when the price falls to the target, a Resistance card when it rises to it.
  */
 export const COLUMN_LABEL: Readonly<Record<KanbanColumn, string>> = {
-  SUPPORT: 'Stop Loss',
-  RESISTANCE: 'Take Profit',
+  SUPPORT: 'Support',
+  RESISTANCE: 'Resistance',
 };
 
 export interface KanbanCard {

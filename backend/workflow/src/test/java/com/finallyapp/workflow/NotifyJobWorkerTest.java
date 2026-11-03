@@ -46,7 +46,7 @@ class NotifyJobWorkerTest {
         assertThat(n.column()).isEqualTo(KanbanColumn.SUPPORT);
         assertThat(n.targetPrice()).isEqualByComparingTo("185");
         assertThat(n.price()).isEqualByComparingTo("184.97");
-        assertThat(n.message()).isEqualTo("AAPL hit stop loss 185.00 (now 184.97)");
+        assertThat(n.message()).isEqualTo("AAPL hit support 185.00 (now 184.97)");
     }
 
     @Test
@@ -60,11 +60,11 @@ class NotifyJobWorkerTest {
     void createdAndMovedHaveNoPrice() {
         Notification created = NotifyJobWorker.toNotification(job(1, "CARD_CREATED", Map.of("price", 1.0)));
         assertThat(created.price()).isNull();
-        assertThat(created.message()).isEqualTo("New Stop Loss card: AAPL @ 185.00");
+        assertThat(created.message()).isEqualTo("New Support card: AAPL @ 185.00");
 
         Notification moved = NotifyJobWorker.toNotification(
                 job(2, "CARD_MOVED", Map.of("column", "RESISTANCE", "targetPrice", 200.0)));
-        assertThat(moved.message()).isEqualTo("AAPL moved to Take Profit @ 200.00");
+        assertThat(moved.message()).isEqualTo("AAPL moved to Resistance @ 200.00");
     }
 
     @Test

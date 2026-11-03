@@ -17,13 +17,13 @@ export function validateTargetPrice(raw: string | number | null | undefined): Pr
 }
 
 /**
- * Hint (non-blocking): stop-loss targets normally sit below the current price,
- * take-profit targets above it.
+ * Hint (non-blocking): support targets normally sit below the current price,
+ * resistance targets above it.
  */
 export function targetHint(column: KanbanColumn, target: number, price: number | null | undefined): string | null {
   if (price == null) return null;
-  if (column === 'SUPPORT' && target > price) return 'Stop loss is above the current price';
-  if (column === 'RESISTANCE' && target < price) return 'Take profit is below the current price';
+  if (column === 'SUPPORT' && target > price) return 'Support is above the current price';
+  if (column === 'RESISTANCE' && target < price) return 'Resistance is below the current price';
   return null;
 }
 

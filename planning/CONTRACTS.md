@@ -133,7 +133,7 @@ Seed (a separate migration, idempotent with `ON CONFLICT DO NOTHING`): profile `
 
 ## 5. Kanban & alert rules
 
-- **Display names**: column `SUPPORT` is shown to users as **Stop Loss**, `RESISTANCE` as **Take Profit** (UI labels and notification texts). The codes in the API, database and Camunda process are unchanged.
+- **Display names**: column `SUPPORT` is shown to users as **Support**, `RESISTANCE` as **Resistance** (UI labels and notification texts). The codes in the API, database and Camunda process are unchanged. The board is shown on both the **Portfolio** and the **Alerts** page (same cards; the Alerts page shows it below the upper/lower-limit alerts list).
 - A card is `(ticker, column ∈ {SUPPORT, RESISTANCE}, targetPrice)`. One ticker may have several cards. The ticker does not need to be on the watchlist; creating a card adds the ticker to the price source so it gets live prices (same mechanism as watchlist add).
 - Alert trigger: SUPPORT fires when `price <= target`; RESISTANCE fires when `price >= target`.
 - Fire only when `armed = true`; then set `armed = false`. Re-arm (`armed = true`) when the condition becomes false again, when the target price is edited, or when the card moves column.

@@ -8,6 +8,7 @@ import { PriceStreamService } from '../../core/price-stream.service';
 import { WatchlistService } from '../../core/watchlist.service';
 import { PricePipe, VolumePipe } from '../../shared/format';
 import { PriceFlashDirective } from '../../shared/price-flash.directive';
+import { KanbanBoardComponent } from '../portfolio/kanban-board.component';
 
 /** How often the list is reloaded for fresh day high/low and volume. */
 export const REFRESH_MS = 30_000;
@@ -22,10 +23,11 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
 @Component({
   selector: 'app-alerts-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, DatePipe, PricePipe, VolumePipe, PriceFlashDirective],
+  imports: [FormsModule, RouterLink, DatePipe, PricePipe, VolumePipe, PriceFlashDirective, KanbanBoardComponent],
   host: { class: 'block h-full' },
   template: `
-    <section class="panel mx-auto flex h-full max-w-6xl flex-col overflow-hidden">
+    <div class="mx-auto flex h-full max-w-6xl flex-col gap-2">
+    <section class="panel flex min-h-[240px] flex-1 flex-col overflow-hidden">
       <div class="panel-title">
         <span>Price alerts</span>
         <div class="flex items-center gap-3 normal-case tracking-normal">
@@ -138,6 +140,15 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
         }
       </div>
     </section>
+
+    <section class="panel flex min-h-[340px] flex-1 flex-col overflow-hidden" data-testid="alerts-kanban">
+      <div class="panel-title">
+        <span>Target prices · Support / Resistance</span>
+        <span class="normal-case tracking-normal">Alerts via Camunda workflow</span>
+      </div>
+      <app-kanban-board class="min-h-0 flex-1" />
+    </section>
+    </div>
   `,
 })
 export class AlertsPage implements OnInit {
