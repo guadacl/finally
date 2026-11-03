@@ -1,0 +1,45 @@
+# Keycloak for FinAlly login & registration (included by the root docker-compose.yml) - LOCAL DEV ONLY.
+#
+#   Login / register:  http://localhost:8180 is where the browser is sent by the app (realm "finally")
+#   Admin console:     http://localhost:8180/admin  (admin / admin, change KEYCLOAK_ADMIN_PASSWORD in .env)
+#   Demo user:         demo / demo1234
+#
+# The realm (client "finally-app", self-registration on) is imported from ./realm on first start.
+# Standalone:  docker compose -f keycloak/compose.keycloak.yml up -d
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    container_name: finally-keycloak
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      # The browser reaches Keycloak on the host port; the app container reaches it as http://keycloak:8080.
+      # A fixed public hostname keeps the token issuer identical for both.
+      KC_HOSTNAME: http://localhost:${KEYCLOAK_HOST_PORT:-8180}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      # Used by the realm import placeholders (client secret, redirect URIs)
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-finally-dev-secret}
+      APP_PORT: ${APP_PORT:-8000}
+    ports:
+      # loopback only: the login page must be reachable from this machine's browser, not from the network
+      - "127.0.0.1:${KEYCLOAK_HOST_PORT:-8180}:8080"
+    volumes:
+      # whole data dir: the image owns it (uid 1000); a new subfolder would be created root-owned and unwritable
+      - finally-keycloak:/opt/keycloak/data
+      - ./realm:/opt/keycloak/data/import:ro
+    healthcheck:
+      # The image has no curl/wget: raw HTTP over bash /dev/tcp against the management port.
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9000 && printf \"GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n\" >&3 && grep -q \"UP\" <&3'"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+
+volumes:
+  finally-keycloak:
+    name: finally-keycloak

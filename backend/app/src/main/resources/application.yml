@@ -41,6 +41,14 @@ spring:
 
 server:
   port: 8000
+  servlet:
+    session:
+      cookie:
+        # Browsers share localhost cookies across ports: a generic JSESSIONID from another local app
+        # (Camunda, other dev servers) would overwrite ours and silently drop the login.
+        name: FINALLY_SESSION
+        same-site: lax
+        http-only: true
   shutdown: graceful
   compression:
     enabled: true
@@ -55,6 +63,14 @@ management:
 finally:
   workflow:
     enabled: ${FINALLY_WORKFLOW_ENABLED:true}
+  auth:
+    # Keycloak login (see keycloak/README.md). AUTH_ENABLED=false only for tests / local runs without Keycloak.
+    enabled: ${AUTH_ENABLED:true}
+    keycloak-url: ${KEYCLOAK_URL:http://localhost:8180}                 # as seen by the browser
+    keycloak-internal-url: ${KEYCLOAK_INTERNAL_URL:}                     # as seen by the backend (Docker: http://keycloak:8080)
+    realm: ${KEYCLOAK_REALM:finally}
+    client-id: ${KEYCLOAK_CLIENT_ID:finally-app}
+    client-secret: ${KEYCLOAK_CLIENT_SECRET:finally-dev-secret}
   llm:
     mock: ${LLM_MOCK:false}
     api-key: ${OPENROUTER_API_KEY:}

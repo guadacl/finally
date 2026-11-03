@@ -26,6 +26,9 @@ public class WebConfig implements WebMvcConfigurer {
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         registry.addResourceHandler("/**")
                 .addResourceLocations(staticLocations)
+                // Browsers must revalidate (cheap 304s via Last-Modified) so an old cached index.html can never keep
+                // running an outdated build of the app after an update.
+                .setCacheControl(org.springframework.http.CacheControl.noCache())
                 .resourceChain(true)
                 .addResolver(new SpaFallbackResolver());
     }
@@ -45,7 +48,8 @@ public class WebConfig implements WebMvcConfigurer {
         }
     }
 
-    static boolean isSpaRoute(String path) {
+    /** True for Angular routes such as {@code markets} or {@code portfolio} (no {@code api/} prefix, no file extension). */
+    public static boolean isSpaRoute(String path) {
         if (path.equals("api") || path.startsWith("api/")) {
             return false;
         }

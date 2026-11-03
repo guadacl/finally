@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive } from '@angular/router';
+import { AuthService } from '../core/auth.service';
 import { PortfolioService } from '../core/portfolio.service';
 import { PriceStreamService } from '../core/price-stream.service';
 import { MoneyPipe, signClass } from '../shared/format';
@@ -58,6 +59,28 @@ import { PriceFlashDirective } from '../shared/price-flash.directive';
           </span>
           <span class="hidden text-[10px] tracking-widest text-muted uppercase md:inline">{{ status() }}</span>
         </div>
+        @if (user(); as u) {
+          <div class="flex items-center gap-2 border-l border-edge pl-4">
+            <span
+              class="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-[11px] font-bold text-primary uppercase"
+              aria-hidden="true"
+              >{{ initial() }}</span
+            >
+            <span class="hidden max-w-32 truncate text-xs text-fg lg:inline" data-testid="user-name" [attr.title]="u.email ?? u.username">{{
+              u.username
+            }}</span>
+            @if (u.authEnabled !== false) {
+              <button
+                type="button"
+                data-testid="logout-button"
+                (click)="logout()"
+                class="rounded border border-edge px-2 py-1 text-[10px] font-semibold tracking-wider text-muted uppercase transition-colors hover:border-down hover:text-down"
+              >
+                Logout
+              </button>
+            }
+          </div>
+        }
       </div>
     </header>
   `,
@@ -65,6 +88,18 @@ import { PriceFlashDirective } from '../shared/price-flash.directive';
 export class HeaderComponent {
   private readonly portfolio = inject(PortfolioService);
   private readonly prices = inject(PriceStreamService);
+  private readonly auth = inject(AuthService);
+
+  readonly user = this.auth.user;
+  readonly initial = computed(() => (this.user()?.username ?? '?').charAt(0));
+
+  constructor() {
+    this.auth.load();
+  }
+
+  logout(): void {
+    this.auth.logout();
+  }
 
   readonly nav = [
     { id: 'markets', path: '/markets', label: 'Markets' },

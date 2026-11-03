@@ -18,6 +18,8 @@ public final class KanbanProcess {
     public static final String VAR_COLUMN = "column";
     public static final String VAR_TARGET_PRICE = "targetPrice";
     public static final String VAR_PRICE = "price";
+    /** Keycloak subject of the card owner; routes notifications to that user only. */
+    public static final String VAR_USER_ID = "userId";
 
     private KanbanProcess() {
     }

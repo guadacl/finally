@@ -49,9 +49,11 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 /** Full app against a real Postgres (Flyway migrations from finally-db), with a mocked Camunda workflow. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
         "finally.workflow.enabled=false",
+        "finally.auth.enabled=false",
         "camunda.client.enabled=false",
         "finally.llm.mock=true",
         "finally.market.massive-api-key=",
+        "finally.market.finnhub-api-key=",
         "finally.portfolio.snapshot-initial-delay-ms=600000",
         "finally.stream.heartbeat-ms=600000"
 })
@@ -190,7 +192,7 @@ class AppIntegrationTest {
         assertThat(created.body().path("ticker").asText()).isEqualTo("MSFT");
         assertThat(created.body().path("armed").asBoolean()).isTrue();
         assertThat(created.body().path("currentPrice").isNumber()).isTrue();
-        verify(workflow).cardCreated(eq(new KanbanCardRef(id, "MSFT", KanbanColumn.RESISTANCE, new BigDecimal("100000.0000"))));
+        verify(workflow).cardCreated(eq(new KanbanCardRef(id, "MSFT", KanbanColumn.RESISTANCE, new BigDecimal("100000.0000"), "default")));
         assertThat(jdbc.sql("SELECT process_instance_key FROM kanban_cards WHERE id = :id").param("id", id)
                 .query(Long.class).single()).isEqualTo(4242L);
 
@@ -270,8 +272,8 @@ class AppIntegrationTest {
     @Order(7)
     void notificationStreamDeliversPublishedNotifications() throws Exception {
         Notification n = Notification.of(NotificationType.TARGET_HIT,
-                new KanbanCardRef(UUID.randomUUID(), "AAPL", KanbanColumn.SUPPORT, new BigDecimal("185")),
-                new BigDecimal("184.97"), "AAPL hit support 185.00 (now 184.97)");
+                new KanbanCardRef(UUID.randomUUID(), "AAPL", KanbanColumn.SUPPORT, new BigDecimal("185"), "default"),
+                new BigDecimal("184.97"), "AAPL hit stop loss 185.00 (now 184.97)");
         List<String> lines = readSse("/api/stream/notifications", 3, () -> {
             // publish repeatedly until the client is registered
             CompletableFuture.runAsync(() -> {

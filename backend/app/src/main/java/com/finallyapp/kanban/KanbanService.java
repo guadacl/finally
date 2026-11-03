@@ -64,9 +64,9 @@ public class KanbanService {
         if (key != null) {
             repo.setProcessInstanceKey(row.id(), key);
             row = new CardRow(row.id(), row.ticker(), row.column(), row.targetPrice(), row.sortOrder(), row.armed(),
-                    key, row.createdAt(), row.updatedAt());
+                    key, row.createdAt(), row.updatedAt(), row.userId());
         }
-        alerts.put(row.id(), row.ticker(), row.column(), row.targetPrice(), row.armed());
+        alerts.put(row.id(), row.userId(), row.ticker(), row.column(), row.targetPrice(), row.armed());
         return toDto(row);
     }
 
@@ -94,7 +94,7 @@ public class KanbanService {
         CardRow row = repo.update(id, column, target, sortOrder, armed);
 
         if (columnChanged || targetChanged) {
-            alerts.put(row.id(), row.ticker(), row.column(), row.targetPrice(), row.armed());
+            alerts.put(row.id(), row.userId(), row.ticker(), row.column(), row.targetPrice(), row.armed());
             try {
                 workflow.cardMoved(ref(row));
             } catch (RuntimeException e) {
@@ -139,7 +139,7 @@ public class KanbanService {
     }
 
     static KanbanCardRef ref(CardRow r) {
-        return new KanbanCardRef(r.id(), r.ticker(), r.column(), r.targetPrice());
+        return new KanbanCardRef(r.id(), r.ticker(), r.column(), r.targetPrice(), r.userId());
     }
 
     private KanbanCard toDto(CardRow r) {

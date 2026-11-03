@@ -1,5 +1,6 @@
 package com.finallyapp.watchlist;
 
+import com.finallyapp.security.CurrentUser;
 import com.finallyapp.api.model.WatchlistItem;
 import com.finallyapp.config.Tickers;
 import com.finallyapp.error.ApiException;
@@ -15,7 +16,6 @@ import org.springframework.stereotype.Service;
 @Service
 public class WatchlistService {
 
-    static final String USER = "default";
 
     private final JdbcClient jdbc;
     private final PriceCache cache;
@@ -32,14 +32,14 @@ public class WatchlistService {
 
     public List<WatchlistItem> list() {
         return jdbc.sql("SELECT ticker, added_at FROM watchlist WHERE user_id = :u ORDER BY added_at, ticker")
-                .param("u", USER)
+                .param("u", CurrentUser.id())
                 .query((rs, i) -> new Row(rs.getString(1), rs.getObject(2, OffsetDateTime.class)))
                 .list().stream().map(this::toItem).toList();
     }
 
     public List<String> tickers() {
         return jdbc.sql("SELECT ticker FROM watchlist WHERE user_id = :u ORDER BY added_at, ticker")
-                .param("u", USER).query(String.class).list();
+                .param("u", CurrentUser.id()).query(String.class).list();
     }
 
     /** Adds a ticker (400 INVALID_TICKER, 409 TICKER_EXISTS) and starts its live prices. */
@@ -50,7 +50,7 @@ public class WatchlistService {
                         ON CONFLICT (user_id, ticker) DO NOTHING
                         RETURNING ticker, added_at
                         """)
-                .param("u", USER).param("t", ticker)
+                .param("u", CurrentUser.id()).param("t", ticker)
                 .query((rs, i) -> new Row(rs.getString(1), rs.getObject(2, OffsetDateTime.class)))
                 .optional()
                 .orElseThrow(() -> ApiException.conflict(ErrorCodes.TICKER_EXISTS, ticker + " is already on the watchlist"));
@@ -62,7 +62,7 @@ public class WatchlistService {
     public void remove(String rawTicker) {
         String ticker = rawTicker == null ? "" : rawTicker.trim().toUpperCase();
         int n = jdbc.sql("DELETE FROM watchlist WHERE user_id = :u AND ticker = :t")
-                .param("u", USER).param("t", ticker).update();
+                .param("u", CurrentUser.id()).param("t", ticker).update();
         if (n == 0) {
             throw ApiException.notFound(ErrorCodes.NOT_FOUND, ticker + " is not on the watchlist");
         }

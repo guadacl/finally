@@ -74,7 +74,9 @@ public class NotifyJobWorker {
 
         UUID id = UUID.nameUUIDFromBytes(("finally-notify:" + job.getKey()).getBytes(StandardCharsets.UTF_8));
         String message = NotificationMessages.format(type, ticker, column, targetPrice, price);
-        return new Notification(id, type, cardId, ticker, column, targetPrice, price, message, Instant.now());
+        Object owner = vars.get(KanbanProcess.VAR_USER_ID);
+        return new Notification(id, type, cardId, ticker, column, targetPrice, price, message, Instant.now(),
+                owner == null ? null : owner.toString());
     }
 
     static BigDecimal toDecimal(Object value) {

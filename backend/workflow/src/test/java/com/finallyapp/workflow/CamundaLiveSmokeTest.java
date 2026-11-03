@@ -50,7 +50,7 @@ class CamundaLiveSmokeTest {
                         .send().join().getProcessInstanceKey();
                 assertThat(key).isPositive();
                 await().atMost(Duration.ofSeconds(20)).until(() -> received.size() == 1);
-                assertThat(received.get(0).message()).isEqualTo("New SUPPORT card: AAPL @ 185.00");
+                assertThat(received.get(0).message()).isEqualTo("New Stop Loss card: AAPL @ 185.00");
 
                 // repeated target hits must each produce a notification
                 for (double price : new double[] {184.97, 184.5}) {
@@ -72,11 +72,11 @@ class CamundaLiveSmokeTest {
                         NotificationType.CARD_CREATED, NotificationType.TARGET_HIT, NotificationType.TARGET_HIT,
                         NotificationType.CARD_MOVED, NotificationType.TARGET_HIT);
                 assertThat(received).extracting(Notification::message).containsExactly(
-                        "New SUPPORT card: AAPL @ 185.00",
-                        "AAPL hit support 185.00 (now 184.97)",
-                        "AAPL hit support 185.00 (now 184.50)",
-                        "AAPL moved to RESISTANCE @ 200.00",
-                        "AAPL hit resistance 200.00 (now 200.25)");
+                        "New Stop Loss card: AAPL @ 185.00",
+                        "AAPL hit stop loss 185.00 (now 184.97)",
+                        "AAPL hit stop loss 185.00 (now 184.50)",
+                        "AAPL moved to Take Profit @ 200.00",
+                        "AAPL hit take profit 200.00 (now 200.25)");
 
                 client.newCorrelateMessageCommand().messageName(KanbanProcess.MSG_CARD_DELETED)
                         .correlationKey(cardId).send().join();

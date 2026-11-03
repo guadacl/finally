@@ -92,7 +92,7 @@ const LIVE_SAMPLE_MS = 2000;
 
     <section class="panel flex min-h-[360px] flex-col overflow-hidden xl:row-span-2">
       <div class="panel-title">
-        <span>Price levels · Support / Resistance</span>
+        <span>Price alerts · Stop Loss / Take Profit</span>
         <span class="normal-case tracking-normal">Alerts via Camunda workflow</span>
       </div>
       <app-kanban-board class="min-h-0 flex-1" />

@@ -14,8 +14,8 @@ services:
     container_name: finally-camunda
     ports:
       # host ports are configurable (.env) in case another Camunda already uses them; the app uses the internal network
-      - "${CAMUNDA_GRPC_HOST_PORT:-26500}:26500"
-      - "${CAMUNDA_WEB_HOST_PORT:-8081}:8080"
+      - "127.0.0.1:${CAMUNDA_GRPC_HOST_PORT:-26500}:26500"
+      - "127.0.0.1:${CAMUNDA_WEB_HOST_PORT:-8081}:8080"
     environment:
       # keep the JVM reasonably small for a laptop
       JAVA_OPTS: "-Xms512m -Xmx1g"

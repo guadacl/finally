@@ -36,13 +36,15 @@ public class AlertEngine implements PriceListener {
     /** Mutable in-memory card state; guarded by its own monitor. */
     static final class CardState {
         final UUID id;
+        final String userId;
         final String ticker;
         KanbanColumn column;
         BigDecimal target;
         boolean armed;
 
-        CardState(UUID id, String ticker, KanbanColumn column, BigDecimal target, boolean armed) {
+        CardState(UUID id, String userId, String ticker, KanbanColumn column, BigDecimal target, boolean armed) {
             this.id = id;
+            this.userId = userId;
             this.ticker = ticker;
             this.column = column;
             this.target = target;
@@ -50,7 +52,7 @@ public class AlertEngine implements PriceListener {
         }
 
         synchronized KanbanCardRef ref() {
-            return new KanbanCardRef(id, ticker, column, target);
+            return new KanbanCardRef(id, ticker, column, target, userId);
         }
     }
 
@@ -81,14 +83,14 @@ public class AlertEngine implements PriceListener {
         dispatcher.shutdown();
     }
 
-    /** Loads cards from the DB before the market data source starts. */
+    /** Loads every user's cards from the DB before the market data source starts. */
     @EventListener(ApplicationReadyEvent.class)
     @Order(50)
     public void load() {
         try {
-            List<KanbanRepository.CardRow> rows = repo.findAll();
+            List<KanbanRepository.CardRow> rows = repo.findAllUsers();
             cards.clear();
-            rows.forEach(r -> put(r.id(), r.ticker(), r.column(), r.targetPrice(), r.armed()));
+            rows.forEach(r -> put(r.id(), r.userId(), r.ticker(), r.column(), r.targetPrice(), r.armed()));
             log.info("Alert engine loaded {} kanban cards", rows.size());
         } catch (RuntimeException e) {
             log.error("Could not load kanban cards: {}", e.toString());
@@ -96,8 +98,8 @@ public class AlertEngine implements PriceListener {
     }
 
     /** Adds or replaces a card's in-memory state (after create / edit / move). */
-    public void put(UUID id, String ticker, KanbanColumn column, BigDecimal target, boolean armed) {
-        cards.put(id, new CardState(id, ticker, column, target, armed));
+    public void put(UUID id, String userId, String ticker, KanbanColumn column, BigDecimal target, boolean armed) {
+        cards.put(id, new CardState(id, userId, ticker, column, target, armed));
     }
 
     public void remove(UUID id) {
@@ -128,7 +130,7 @@ public class AlertEngine implements PriceListener {
                 return d;
             }
             card.armed = d == Decision.REARM;
-            ref = new KanbanCardRef(card.id, card.ticker, card.column, card.target);
+            ref = new KanbanCardRef(card.id, card.ticker, card.column, card.target, card.userId);
         }
         dispatcher.execute(() -> {
             if (cards.get(card.id) != card) {

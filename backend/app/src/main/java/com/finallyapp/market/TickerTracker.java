@@ -12,14 +12,14 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 
 /**
- * Keeps the market data source's ticker set equal to watchlist ∪ kanban card tickers ∪ open positions.
+ * Keeps the market data source's ticker set equal to the watchlist ∪ kanban card ∪ open position tickers
+ * of <em>all</em> users (prices are shared; each user only sees their own lists).
  * Starts the source once the application (and Flyway) is ready.
  */
 @Component
 public class TickerTracker {
 
     private static final Logger log = LoggerFactory.getLogger(TickerTracker.class);
-    static final String USER = "default";
 
     private final MarketDataSource source;
     private final JdbcClient jdbc;
@@ -49,11 +49,11 @@ public class TickerTracker {
     /** Stop pricing the ticker if no watchlist entry, kanban card or position references it anymore. */
     public void untrackIfUnused(String ticker) {
         Integer refs = jdbc.sql("""
-                        SELECT (SELECT count(*) FROM watchlist WHERE user_id = :u AND ticker = :t)
-                             + (SELECT count(*) FROM kanban_cards WHERE user_id = :u AND ticker = :t)
-                             + (SELECT count(*) FROM positions WHERE user_id = :u AND ticker = :t)
+                        SELECT (SELECT count(*) FROM watchlist WHERE ticker = :t)
+                             + (SELECT count(*) FROM kanban_cards WHERE ticker = :t)
+                             + (SELECT count(*) FROM positions WHERE ticker = :t)
                         """)
-                .param("u", USER).param("t", ticker)
+                .param("t", ticker)
                 .query(Integer.class).single();
         if (refs == null || refs == 0) {
             source.removeTicker(ticker);
@@ -68,12 +68,11 @@ public class TickerTracker {
     List<String> referencedTickers() {
         return jdbc.sql("""
                         SELECT ticker FROM (
-                          SELECT ticker, added_at AS ts, 0 AS src FROM watchlist WHERE user_id = :u
-                          UNION ALL SELECT ticker, created_at, 1 FROM kanban_cards WHERE user_id = :u
-                          UNION ALL SELECT ticker, updated_at, 2 FROM positions WHERE user_id = :u
+                          SELECT ticker, added_at AS ts, 0 AS src FROM watchlist
+                          UNION ALL SELECT ticker, created_at, 1 FROM kanban_cards
+                          UNION ALL SELECT ticker, updated_at, 2 FROM positions
                         ) x GROUP BY ticker ORDER BY min(src), min(ts), ticker
                         """)
-                .param("u", USER)
                 .query(String.class).list();
     }
 }

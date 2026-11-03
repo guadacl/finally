@@ -54,6 +54,8 @@ services:
       CAMUNDA_REST_ADDRESS: http://camunda:8080
       FINALLY_WORKFLOW_ENABLED: "true"
       LLM_MOCK: "true"
+      # E2E specs predate Keycloak login: run them without auth (single "default" user).
+      AUTH_ENABLED: "false"
       MASSIVE_API_KEY: ""
       OPENROUTER_API_KEY: ""
     depends_on:

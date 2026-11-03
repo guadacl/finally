@@ -1,7 +1,7 @@
 import { CdkDrag, CdkDragDrop, CdkDragPlaceholder, CdkDropList, CdkDropListGroup, moveItemInArray, transferArrayItem } from '@angular/cdk/drag-drop';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { KANBAN_COLUMNS, KanbanCard, KanbanColumn, errorMessage } from '../../api/models';
+import { COLUMN_LABEL, KANBAN_COLUMNS, KanbanCard, KanbanColumn, errorMessage } from '../../api/models';
 import { KanbanService, validateTargetPrice } from '../../core/kanban.service';
 import { PriceStreamService } from '../../core/price-stream.service';
 import { TICKER_PATTERN, normalizeTicker } from '../../core/watchlist.service';
@@ -31,8 +31,8 @@ import { KanbanCardComponent } from './kanban-card.component';
         [ngModel]="column()"
         (ngModelChange)="column.set($event)"
       >
-        <option value="SUPPORT">Support</option>
-        <option value="RESISTANCE">Resistance</option>
+        <option value="SUPPORT">{{ labels.SUPPORT }}</option>
+        <option value="RESISTANCE">{{ labels.RESISTANCE }}</option>
       </select>
       <input
         name="kPrice"
@@ -57,9 +57,9 @@ import { KanbanCardComponent } from './kanban-card.component';
       @for (col of columns; track col) {
         <div class="flex min-h-0 flex-col rounded border border-edge bg-bg/60">
           <div class="flex items-center justify-between border-b border-edge px-2 py-1.5">
-            <span class="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest uppercase" [class]="col === 'SUPPORT' ? 'text-up' : 'text-down'">
-              <span class="h-1.5 w-1.5 rounded-full" [class]="col === 'SUPPORT' ? 'bg-up' : 'bg-down'"></span>
-              {{ col === 'SUPPORT' ? 'Support' : 'Resistance' }}
+            <span class="flex items-center gap-1.5 text-[11px] font-semibold tracking-widest uppercase" [class]="col === 'SUPPORT' ? 'text-down' : 'text-up'">
+              <span class="h-1.5 w-1.5 rounded-full" [class]="col === 'SUPPORT' ? 'bg-down' : 'bg-up'"></span>
+              {{ labels[col] }}
             </span>
             <span class="num text-[10px] text-muted">{{ list(col).length }}</span>
           </div>
@@ -77,7 +77,7 @@ import { KanbanCardComponent } from './kanban-card.component';
               </app-kanban-card>
             } @empty {
               <div class="m-auto text-center text-[11px] text-muted">
-                {{ col === 'SUPPORT' ? 'Buy-the-dip levels' : 'Take-profit levels' }}<br />Drop cards here
+                {{ col === 'SUPPORT' ? 'Alerts when the price falls to the target' : 'Alerts when the price rises to the target' }}<br />Drop cards here
               </div>
             }
           </div>
@@ -103,6 +103,7 @@ export class KanbanBoardComponent {
   private readonly prices = inject(PriceStreamService);
 
   readonly columns = KANBAN_COLUMNS;
+  readonly labels = COLUMN_LABEL;
   readonly ticker = signal('');
   readonly column = signal<KanbanColumn>('SUPPORT');
   readonly price = signal('');

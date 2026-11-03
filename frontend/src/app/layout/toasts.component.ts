@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { COLUMN_LABEL, KanbanColumn } from '../api/models';
 import { ToastService } from '../core/toast.service';
 import { PricePipe } from '../shared/format';
 
@@ -25,8 +26,8 @@ import { PricePipe } from '../shared/format';
                 @if (t.column) {
                   <span
                     class="rounded px-1 text-[9px] font-semibold tracking-wider uppercase"
-                    [class]="t.column === 'SUPPORT' ? 'bg-up/15 text-up' : 'bg-down/15 text-down'"
-                    >{{ t.column }}</span
+                    [class]="t.column === 'SUPPORT' ? 'bg-down/15 text-down' : 'bg-up/15 text-up'"
+                    >{{ columnLabel(t.column) }}</span
                   >
                 }
                 <span class="ml-auto text-[9px] tracking-widest text-muted uppercase">{{ label(t.type) }}</span>
@@ -100,5 +101,9 @@ export class ToastsComponent {
       default:
         return type.toLowerCase();
     }
+  }
+
+  columnLabel(column: KanbanColumn): string {
+    return COLUMN_LABEL[column] ?? column;
   }
 }

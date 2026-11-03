@@ -1,0 +1,59 @@
+{
+  "realm": "finally",
+  "displayName": "FinAlly",
+  "displayNameHtml": "<span style=\"font-weight:700\">Fin<span style=\"color:#ecad0a\">Ally</span></span>",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": false,
+  "rememberMe": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "verifyEmail": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "failureFactor": 10,
+  "passwordPolicy": "length(8) and notUsername",
+  "ssoSessionIdleTimeout": 28800,
+  "ssoSessionMaxLifespan": 86400,
+  "accessTokenLifespan": 300,
+  "clients": [
+    {
+      "clientId": "finally-app",
+      "name": "FinAlly",
+      "description": "FinAlly trading workstation (Spring Boot backend-for-frontend)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${KEYCLOAK_CLIENT_SECRET:finally-dev-secret}",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": true,
+      "baseUrl": "http://localhost:${APP_PORT:8000}/",
+      "redirectUris": [
+        "http://localhost:${APP_PORT:8000}/login/oauth2/code/keycloak"
+      ],
+      "webOrigins": ["+"],
+      "attributes": {
+        "post.logout.redirect.uris": "http://localhost:${APP_PORT:8000}/*"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "demo",
+      "email": "demo@finally.local",
+      "firstName": "Demo",
+      "lastName": "Trader",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        { "type": "password", "value": "demo1234", "temporary": false }
+      ]
+    }
+  ]
+}

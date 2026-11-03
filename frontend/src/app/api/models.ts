@@ -9,6 +9,15 @@ export interface ApiError {
   message: string;
 }
 
+/** `GET /api/me` — the logged-in Keycloak user. */
+export interface UserInfo {
+  id: string;
+  username: string;
+  email?: string | null;
+  name?: string | null;
+  authEnabled?: boolean;
+}
+
 export interface Health {
   status: string;
   database?: string;
@@ -133,6 +142,15 @@ export interface ChatMessage {
 
 export type KanbanColumn = 'SUPPORT' | 'RESISTANCE';
 export const KANBAN_COLUMNS: readonly KanbanColumn[] = ['SUPPORT', 'RESISTANCE'];
+
+/**
+ * User-facing column names. The API codes stay SUPPORT / RESISTANCE:
+ * a Stop Loss alerts when the price falls to the target, a Take Profit when it rises to it.
+ */
+export const COLUMN_LABEL: Readonly<Record<KanbanColumn, string>> = {
+  SUPPORT: 'Stop Loss',
+  RESISTANCE: 'Take Profit',
+};
 
 export interface KanbanCard {
   id: string;

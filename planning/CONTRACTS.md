@@ -118,6 +118,7 @@ Seed (a separate migration, idempotent with `ON CONFLICT DO NOTHING`): profile `
 
 ## 5. Kanban & alert rules
 
+- **Display names**: column `SUPPORT` is shown to users as **Stop Loss**, `RESISTANCE` as **Take Profit** (UI labels and notification texts). The codes in the API, database and Camunda process are unchanged.
 - A card is `(ticker, column ∈ {SUPPORT, RESISTANCE}, targetPrice)`. One ticker may have several cards. The ticker does not need to be on the watchlist; creating a card adds the ticker to the price source so it gets live prices (same mechanism as watchlist add).
 - Alert trigger: SUPPORT fires when `price <= target`; RESISTANCE fires when `price >= target`.
 - Fire only when `armed = true`; then set `armed = false`. Re-arm (`armed = true`) when the condition becomes false again, when the target price is edited, or when the card moves column.
@@ -170,7 +171,14 @@ Already written by the orchestrator — read them, don't edit:
 | Var | Used by | Default |
 |---|---|---|
 | `OPENROUTER_API_KEY` | app | — |
-| `MASSIVE_API_KEY` | app | empty → simulator |
+| `FINNHUB_API_KEY` | app | empty; when set, Finnhub real-time quotes (takes priority over Massive) |
+| `FINNHUB_BASE_URL` / `FINNHUB_CALL_SPACING` | app | `https://finnhub.io/api/v1` / `1100ms` (one quote per call, round-robin) |
+| `MASSIVE_API_KEY` | app | empty → simulator (when Finnhub is also empty) |
+| `AUTH_ENABLED` | app | `true`; `false` = no login, everyone is user `default` (tests only) |
+| `KEYCLOAK_URL` | app | `http://localhost:8180` — Keycloak as seen by the browser (also the token issuer) |
+| `KEYCLOAK_INTERNAL_URL` | app | empty → `KEYCLOAK_URL`; in Docker `http://keycloak:8080` |
+| `KEYCLOAK_REALM` / `KEYCLOAK_CLIENT_ID` / `KEYCLOAK_CLIENT_SECRET` | app, keycloak | `finally` / `finally-app` / `finally-dev-secret` |
+| `KEYCLOAK_HOST_PORT` / `KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD` | keycloak | `8180` / `admin` / `admin` |
 | `LLM_MOCK` | app | `false` |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | postgres, app | `finally` / `finally` / `finally` |
 | `SPRING_DATASOURCE_URL` | app | `jdbc:postgresql://postgres:5432/finally` |
@@ -178,6 +186,16 @@ Already written by the orchestrator — read them, don't edit:
 | `CAMUNDA_REST_ADDRESS` | app | `http://camunda:8080` |
 | `FINALLY_WORKFLOW_ENABLED` | app | `true` |
 
-Ports: app `8000` (public), Camunda web apps (Operate/Tasklist) `8081 → 8080` on host, Postgres `5432` (dev only).
+Ports: app `8000` (public), Keycloak `8180 → 8080` (loopback only), Camunda web apps (Operate/Tasklist) `8081 → 8080` on host, Postgres `5432` (dev only).
 
 For local dev outside Docker, `localhost` replaces the service names; `docker compose up postgres camunda` starts just the infrastructure.
+
+## 11. Authentication (Keycloak)
+
+- **Keycloak 26** runs as the compose service `keycloak` (`keycloak/compose.keycloak.yml`); realm `finally` is imported from `keycloak/realm/finally-realm.json` on first start. Self-registration, password reset and "remember me" are on. Dev user: `demo` / `demo1234`.
+- **Backend for frontend**: Spring Security (`spring-boot-starter-oauth2-client`) runs the OIDC authorization-code flow with the confidential client `finally-app` and keeps the login in the server session cookie (`JSESSIONID`). The SPA never handles tokens or passwords; the `EventSource` streams are authenticated by the same cookie.
+- **Routing**: browser page loads without a session → `302` to `/oauth2/authorization/keycloak` → Keycloak login page (with "Register"). `/api/**` without a session → `401 {"error":"UNAUTHENTICATED"}`; the SPA then navigates to the login. `/api/health` is public.
+- **CSRF**: cookie `XSRF-TOKEN` (readable by JS), echoed as header `X-XSRF-TOKEN` (Angular does this automatically) or form field `_csrf`. Required on every POST/PATCH/DELETE, including `POST /logout`.
+- **Logout**: `POST /logout` ends the Spring session and the Keycloak session (RP-initiated logout), then returns to the app, which shows the login page again.
+- **Per-user data**: `user_id` in every table = the Keycloak subject (`sub`). `GET /api/me` returns `{id, username, email, name, authEnabled}`. A user's first login creates `users_profile` ($10,000) and the 10 default watchlist tickers. Prices are shared; the market data source tracks the tickers of all users. Kanban notifications are delivered only to their owner's notification stream (`userId` in `KanbanCardRef`, `Notification` and the Camunda process variables).
+- **Backend code** reads the user with `com.finallyapp.security.CurrentUser.id()`; background jobs use `CurrentUser.runAs(userId, ...)`. With auth enabled there is no silent default user.

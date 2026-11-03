@@ -26,7 +26,7 @@ class KanbanWorkflowFallbackTest {
     private final List<Notification> published = new CopyOnWriteArrayList<>();
     private final NotificationPublisher publisher = published::add;
     private final KanbanCardRef card =
-            new KanbanCardRef(UUID.randomUUID(), "AAPL", KanbanColumn.SUPPORT, new BigDecimal("185"));
+            new KanbanCardRef(UUID.randomUUID(), "AAPL", KanbanColumn.SUPPORT, new BigDecimal("185"), "user-1");
 
     @SuppressWarnings("unchecked")
     private CamundaKanbanWorkflow workflowWith(CamundaClient client) {
@@ -45,7 +45,7 @@ class KanbanWorkflowFallbackTest {
         assertThat(key).isNull();
         assertThat(published).singleElement().satisfies(n -> {
             assertThat(n.type()).isEqualTo(NotificationType.CARD_CREATED);
-            assertThat(n.message()).isEqualTo("New SUPPORT card: AAPL @ 185.00");
+            assertThat(n.message()).isEqualTo("New Stop Loss card: AAPL @ 185.00");
         });
     }
 
@@ -56,11 +56,11 @@ class KanbanWorkflowFallbackTest {
         CamundaKanbanWorkflow workflow = workflowWith(client);
 
         workflow.targetPriceHit(card, new BigDecimal("184.97"));
-        workflow.cardMoved(new KanbanCardRef(card.id(), "AAPL", KanbanColumn.RESISTANCE, new BigDecimal("200")));
+        workflow.cardMoved(new KanbanCardRef(card.id(), "AAPL", KanbanColumn.RESISTANCE, new BigDecimal("200"), "user-1"));
         workflow.cardDeleted(card.id());
 
         assertThat(published).extracting(Notification::message).containsExactly(
-                "AAPL hit support 185.00 (now 184.97)", "AAPL moved to RESISTANCE @ 200.00");
+                "AAPL hit stop loss 185.00 (now 184.97)", "AAPL moved to Take Profit @ 200.00");
     }
 
     @Test

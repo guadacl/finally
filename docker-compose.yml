@@ -11,6 +11,7 @@ name: finally
 include:
   - db/compose.postgres.yml
   - camunda/compose.camunda.yml
+  - keycloak/compose.keycloak.yml
 
 services:
   app:
@@ -29,6 +30,10 @@ services:
       CAMUNDA_GRPC_ADDRESS: http://camunda:26500
       CAMUNDA_REST_ADDRESS: http://camunda:8080
       FINALLY_WORKFLOW_ENABLED: ${FINALLY_WORKFLOW_ENABLED:-true}
+      # Keycloak login: browser-facing URL vs. container-to-container URL
+      KEYCLOAK_URL: http://localhost:${KEYCLOAK_HOST_PORT:-8180}
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-finally-dev-secret}
     ports:
       - "${APP_PORT:-8000}:8000"   # set APP_PORT in .env if 8000 is taken on the host
     depends_on:
@@ -36,6 +41,9 @@ services:
         condition: service_healthy
       camunda:
         condition: service_healthy
+      # the app starts without Keycloak (no discovery at boot); logins work once Keycloak is up
+      keycloak:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8000/api/health || exit 1"]
       interval: 10s

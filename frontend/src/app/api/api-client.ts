@@ -13,6 +13,7 @@ import {
   PortfolioSnapshot,
   TradeRequest,
   TradeResult,
+  UserInfo,
   WatchlistAddRequest,
   WatchlistItem,
 } from './models';
@@ -32,6 +33,11 @@ export class ApiClient {
   // system
   getHealth(): Observable<Health> {
     return this.http.get<Health>('/api/health');
+  }
+
+  // user
+  getCurrentUser(): Observable<UserInfo> {
+    return this.http.get<UserInfo>('/api/me');
   }
 
   // portfolio

@@ -1,5 +1,6 @@
 package com.finallyapp.portfolio;
 
+import com.finallyapp.security.CurrentUser;
 import com.finallyapp.portfolio.PortfolioMath.Holding;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -12,7 +13,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class PortfolioRepository {
 
-    public static final String USER = "default";
 
     public record PositionRow(String ticker, BigDecimal quantity, BigDecimal avgCost, OffsetDateTime updatedAt) {
     }
@@ -30,31 +30,41 @@ public class PortfolioRepository {
         this.jdbc = jdbc;
     }
 
+    /**
+     * Every user with a profile. When authentication is on, the pre-Keycloak {@code default} user is skipped
+     * (nobody can log in as it, so its portfolio no longer changes).
+     */
+    public List<String> userIds() {
+        List<String> all = jdbc.sql("SELECT id FROM users_profile ORDER BY created_at").query(String.class).list();
+        return !CurrentUser.isAuthEnabled() ? all
+                : all.stream().filter(id -> !CurrentUser.LEGACY_USER.equals(id)).toList();
+    }
+
     public BigDecimal cash() {
         ensureProfile();
         return jdbc.sql("SELECT cash_balance FROM users_profile WHERE id = :u")
-                .param("u", USER).query(BigDecimal.class).single();
+                .param("u", CurrentUser.id()).query(BigDecimal.class).single();
     }
 
     /** Reads the cash balance with a row lock (call inside a transaction). */
     public BigDecimal lockCash() {
         ensureProfile();
         return jdbc.sql("SELECT cash_balance FROM users_profile WHERE id = :u FOR UPDATE")
-                .param("u", USER).query(BigDecimal.class).single();
+                .param("u", CurrentUser.id()).query(BigDecimal.class).single();
     }
 
     public void setCash(BigDecimal cash) {
         jdbc.sql("UPDATE users_profile SET cash_balance = :c WHERE id = :u")
-                .param("c", cash).param("u", USER).update();
+                .param("c", cash).param("u", CurrentUser.id()).update();
     }
 
     private void ensureProfile() {
-        jdbc.sql("INSERT INTO users_profile (id) VALUES (:u) ON CONFLICT (id) DO NOTHING").param("u", USER).update();
+        jdbc.sql("INSERT INTO users_profile (id) VALUES (:u) ON CONFLICT (id) DO NOTHING").param("u", CurrentUser.id()).update();
     }
 
     public List<PositionRow> positions() {
         return jdbc.sql("SELECT ticker, quantity, avg_cost, updated_at FROM positions WHERE user_id = :u ORDER BY ticker")
-                .param("u", USER)
+                .param("u", CurrentUser.id())
                 .query((rs, i) -> new PositionRow(rs.getString(1), rs.getBigDecimal(2), rs.getBigDecimal(3),
                         rs.getObject(4, OffsetDateTime.class)))
                 .list();
@@ -62,7 +72,7 @@ public class PortfolioRepository {
 
     public Optional<Holding> holding(String ticker) {
         return jdbc.sql("SELECT quantity, avg_cost FROM positions WHERE user_id = :u AND ticker = :t")
-                .param("u", USER).param("t", ticker)
+                .param("u", CurrentUser.id()).param("t", ticker)
                 .query((rs, i) -> new Holding(rs.getBigDecimal(1), rs.getBigDecimal(2)))
                 .optional();
     }
@@ -70,7 +80,7 @@ public class PortfolioRepository {
     public void saveHolding(String ticker, Holding h) {
         if (h == null) {
             jdbc.sql("DELETE FROM positions WHERE user_id = :u AND ticker = :t")
-                    .param("u", USER).param("t", ticker).update();
+                    .param("u", CurrentUser.id()).param("t", ticker).update();
             return;
         }
         jdbc.sql("""
@@ -79,7 +89,7 @@ public class PortfolioRepository {
                         ON CONFLICT (user_id, ticker)
                         DO UPDATE SET quantity = EXCLUDED.quantity, avg_cost = EXCLUDED.avg_cost, updated_at = now()
                         """)
-                .param("u", USER).param("t", ticker).param("q", h.quantity()).param("a", h.avgCost())
+                .param("u", CurrentUser.id()).param("t", ticker).param("q", h.quantity()).param("a", h.avgCost())
                 .update();
     }
 
@@ -89,7 +99,7 @@ public class PortfolioRepository {
                         VALUES (:u, :t, :s, :q, :p)
                         RETURNING id, ticker, side, quantity, price, executed_at
                         """)
-                .param("u", USER).param("t", ticker).param("s", side).param("q", qty).param("p", price)
+                .param("u", CurrentUser.id()).param("t", ticker).param("s", side).param("q", qty).param("p", price)
                 .query((rs, i) -> new TradeRow(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3),
                         rs.getBigDecimal(4), rs.getBigDecimal(5), rs.getObject(6, OffsetDateTime.class)))
                 .single();
@@ -97,7 +107,7 @@ public class PortfolioRepository {
 
     public void insertSnapshot(BigDecimal totalValue) {
         jdbc.sql("INSERT INTO portfolio_snapshots (user_id, total_value) VALUES (:u, :v)")
-                .param("u", USER).param("v", totalValue).update();
+                .param("u", CurrentUser.id()).param("v", totalValue).update();
     }
 
     /** Snapshots oldest first (most recent {@code limit}). */
@@ -108,7 +118,7 @@ public class PortfolioRepository {
                           WHERE user_id = :u ORDER BY recorded_at DESC LIMIT :n
                         ) s ORDER BY recorded_at ASC
                         """)
-                .param("u", USER).param("n", limit)
+                .param("u", CurrentUser.id()).param("n", limit)
                 .query((rs, i) -> new SnapshotRow(rs.getBigDecimal(1), rs.getObject(2, OffsetDateTime.class)))
                 .list();
     }

@@ -21,15 +21,16 @@ public final class NotificationMessages {
     /**
      * Examples:
      * <ul>
-     *   <li>CARD_CREATED: {@code New SUPPORT card: AAPL @ 185.00}</li>
-     *   <li>CARD_MOVED: {@code AAPL moved to RESISTANCE @ 200.00}</li>
-     *   <li>TARGET_HIT: {@code AAPL hit support 185.00 (now 184.97)}</li>
+     *   <li>CARD_CREATED: {@code New Stop Loss card: AAPL @ 185.00}</li>
+     *   <li>CARD_MOVED: {@code AAPL moved to Take Profit @ 200.00}</li>
+     *   <li>TARGET_HIT: {@code AAPL hit stop loss 185.00 (now 184.97)}</li>
      * </ul>
+     * Display names: column {@code SUPPORT} is shown as "Stop Loss", {@code RESISTANCE} as "Take Profit".
      */
     public static String format(NotificationType type, String ticker, KanbanColumn column,
                                 BigDecimal targetPrice, BigDecimal price) {
         String t = ticker == null ? "?" : ticker;
-        String col = column == null ? "?" : column.name();
+        String col = label(column);
         return switch (type) {
             case CARD_CREATED -> "New " + col + " card: " + t + " @ " + money(targetPrice);
             case CARD_MOVED -> t + " moved to " + col + " @ " + money(targetPrice);
@@ -42,6 +43,17 @@ public final class NotificationMessages {
     public static Notification build(NotificationType type, KanbanCardRef card, BigDecimal price) {
         return Notification.of(type, card, price,
                 format(type, card.ticker(), card.column(), card.targetPrice(), price));
+    }
+
+    /** User-facing column name; the internal codes stay SUPPORT / RESISTANCE. */
+    public static String label(KanbanColumn column) {
+        if (column == null) {
+            return "?";
+        }
+        return switch (column) {
+            case SUPPORT -> "Stop Loss";
+            case RESISTANCE -> "Take Profit";
+        };
     }
 
     static String money(BigDecimal value) {

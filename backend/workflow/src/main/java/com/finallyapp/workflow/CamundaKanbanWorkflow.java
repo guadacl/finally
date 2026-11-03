@@ -58,6 +58,7 @@ public class CamundaKanbanWorkflow implements KanbanWorkflow {
             vars.put(KanbanProcess.VAR_TICKER, card.ticker());
             vars.put(KanbanProcess.VAR_COLUMN, card.column().name());
             vars.put(KanbanProcess.VAR_TARGET_PRICE, card.targetPrice());
+            vars.put(KanbanProcess.VAR_USER_ID, card.userId());
             CamundaFuture<io.camunda.client.api.response.ProcessInstanceEvent> future = client
                     .newCreateInstanceCommand()
                     .bpmnProcessId(KanbanProcess.PROCESS_ID)

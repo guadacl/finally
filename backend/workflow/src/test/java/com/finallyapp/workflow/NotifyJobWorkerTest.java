@@ -46,18 +46,25 @@ class NotifyJobWorkerTest {
         assertThat(n.column()).isEqualTo(KanbanColumn.SUPPORT);
         assertThat(n.targetPrice()).isEqualByComparingTo("185");
         assertThat(n.price()).isEqualByComparingTo("184.97");
-        assertThat(n.message()).isEqualTo("AAPL hit support 185.00 (now 184.97)");
+        assertThat(n.message()).isEqualTo("AAPL hit stop loss 185.00 (now 184.97)");
+    }
+
+    @Test
+    void carriesOwnerUserIdFromProcessVariable() {
+        Notification n = NotifyJobWorker.toNotification(job(9, "CARD_CREATED", Map.of("userId", "kc-sub-123")));
+        assertThat(n.userId()).isEqualTo("kc-sub-123");
+        assertThat(NotifyJobWorker.toNotification(job(10, "CARD_CREATED", Map.of())).userId()).isNull();
     }
 
     @Test
     void createdAndMovedHaveNoPrice() {
         Notification created = NotifyJobWorker.toNotification(job(1, "CARD_CREATED", Map.of("price", 1.0)));
         assertThat(created.price()).isNull();
-        assertThat(created.message()).isEqualTo("New SUPPORT card: AAPL @ 185.00");
+        assertThat(created.message()).isEqualTo("New Stop Loss card: AAPL @ 185.00");
 
         Notification moved = NotifyJobWorker.toNotification(
                 job(2, "CARD_MOVED", Map.of("column", "RESISTANCE", "targetPrice", 200.0)));
-        assertThat(moved.message()).isEqualTo("AAPL moved to RESISTANCE @ 200.00");
+        assertThat(moved.message()).isEqualTo("AAPL moved to Take Profit @ 200.00");
     }
 
     @Test

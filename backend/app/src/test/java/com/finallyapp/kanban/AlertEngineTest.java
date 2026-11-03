@@ -61,11 +61,11 @@ class AlertEngineTest {
     @Test
     void supportFiresOnceThenRearmsWhenPriceRecovers() {
         UUID id = UUID.randomUUID();
-        engine.put(id, "AAPL", KanbanColumn.SUPPORT, d("185"), true);
+        engine.put(id, "user-1", "AAPL", KanbanColumn.SUPPORT, d("185"), true);
         cache.update("AAPL", 190);
         cache.update("AAPL", 184.97);   // cross -> fire
         cache.update("AAPL", 184.50);   // still below -> no second fire
-        verify(workflow, timeout(2000).times(1)).targetPriceHit(eq(new KanbanCardRef(id, "AAPL", KanbanColumn.SUPPORT, d("185"))), eq(d("184.97")));
+        verify(workflow, timeout(2000).times(1)).targetPriceHit(eq(new KanbanCardRef(id, "AAPL", KanbanColumn.SUPPORT, d("185"), "user-1")), eq(d("184.97")));
         verify(repo, timeout(2000)).setArmed(id, false);
 
         cache.update("AAPL", 186);      // back above -> re-arm
@@ -77,7 +77,7 @@ class AlertEngineTest {
     @Test
     void resistanceFiresWhenPriceRisesToTarget() {
         UUID id = UUID.randomUUID();
-        engine.put(id, "TSLA", KanbanColumn.RESISTANCE, d("260"), true);
+        engine.put(id, "user-1", "TSLA", KanbanColumn.RESISTANCE, d("260"), true);
         cache.update("TSLA", 250);
         cache.update("AAPL", 999);      // other tickers ignored
         verify(workflow, after()).targetPriceHit(any(), any());
@@ -88,7 +88,7 @@ class AlertEngineTest {
     @Test
     void disarmedCardLoadedFromDbDoesNotFireUntilRearmed() {
         UUID id = UUID.randomUUID();
-        engine.put(id, "AAPL", KanbanColumn.SUPPORT, d("185"), false);
+        engine.put(id, "user-1", "AAPL", KanbanColumn.SUPPORT, d("185"), false);
         cache.update("AAPL", 180);
         verify(workflow, after()).targetPriceHit(any(), any());
     }
@@ -96,11 +96,11 @@ class AlertEngineTest {
     @Test
     void editingCardRearmsIt() {
         UUID id = UUID.randomUUID();
-        engine.put(id, "AAPL", KanbanColumn.SUPPORT, d("185"), true);
+        engine.put(id, "user-1", "AAPL", KanbanColumn.SUPPORT, d("185"), true);
         cache.update("AAPL", 180);
         verify(workflow, timeout(2000).times(1)).targetPriceHit(any(), any());
         // user moves the target (service re-arms and replaces in-memory state)
-        engine.put(id, "AAPL", KanbanColumn.SUPPORT, d("175"), true);
+        engine.put(id, "user-1", "AAPL", KanbanColumn.SUPPORT, d("175"), true);
         cache.update("AAPL", 179);
         verify(workflow, afterDelay().times(1)).targetPriceHit(any(), any());
         cache.update("AAPL", 174);
@@ -110,7 +110,7 @@ class AlertEngineTest {
     @Test
     void removedCardNeverFires() {
         UUID id = UUID.randomUUID();
-        engine.put(id, "AAPL", KanbanColumn.SUPPORT, d("185"), true);
+        engine.put(id, "user-1", "AAPL", KanbanColumn.SUPPORT, d("185"), true);
         engine.remove(id);
         cache.update("AAPL", 100);
         verify(workflow, after()).targetPriceHit(any(), any());
@@ -121,7 +121,7 @@ class AlertEngineTest {
     void workflowFailureDoesNotBreakEngine() {
         UUID id = UUID.randomUUID();
         org.mockito.Mockito.doThrow(new RuntimeException("camunda down")).when(workflow).targetPriceHit(any(), any());
-        engine.put(id, "AAPL", KanbanColumn.RESISTANCE, d("100"), true);
+        engine.put(id, "user-1", "AAPL", KanbanColumn.RESISTANCE, d("100"), true);
         cache.update("AAPL", 101);
         verify(workflow, timeout(2000)).targetPriceHit(any(), any());
         cache.update("AAPL", 99);

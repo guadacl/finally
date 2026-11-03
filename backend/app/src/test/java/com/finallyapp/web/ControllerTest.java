@@ -47,6 +47,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+@org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc(addFilters = false)
 @WebMvcTest(controllers = {PortfolioController.class, WatchlistController.class, KanbanController.class,
         ChatController.class, HealthController.class})
 class ControllerTest {

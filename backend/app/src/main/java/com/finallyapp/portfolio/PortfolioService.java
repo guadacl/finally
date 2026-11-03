@@ -14,6 +14,7 @@ import com.finallyapp.portfolio.PortfolioMath.Fill;
 import com.finallyapp.portfolio.PortfolioMath.Holding;
 import com.finallyapp.portfolio.PortfolioRepository.PositionRow;
 import com.finallyapp.portfolio.PortfolioRepository.TradeRow;
+import com.finallyapp.security.CurrentUser;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
@@ -108,14 +109,23 @@ public class PortfolioService {
                 .toList();
     }
 
-    /** Records the total portfolio value every 30 s (first one shortly after startup). */
+    /** Records every user's total portfolio value every 30 s (first one shortly after startup). */
     @Scheduled(initialDelayString = "${finally.portfolio.snapshot-initial-delay-ms:5000}",
             fixedRateString = "${finally.portfolio.snapshot-interval-ms:30000}")
     public void recordSnapshot() {
+        List<String> users;
         try {
-            repo.insertSnapshot(getPortfolio().getTotalValue());
+            users = repo.userIds();
         } catch (RuntimeException e) {
             log.warn("Portfolio snapshot failed: {}", e.toString());
+            return;
+        }
+        for (String user : users) {
+            try {
+                CurrentUser.runAs(user, () -> repo.insertSnapshot(getPortfolio().getTotalValue()));
+            } catch (RuntimeException e) {
+                log.warn("Portfolio snapshot for {} failed: {}", user, e.toString());
+            }
         }
     }
 

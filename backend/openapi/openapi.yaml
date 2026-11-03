@@ -10,6 +10,7 @@ servers:
   - url: /
 tags:
   - name: system
+  - name: user
   - name: market
   - name: portfolio
   - name: watchlist
@@ -26,6 +27,23 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Health' }
+
+  /api/me:
+    get:
+      tags: [user]
+      operationId: getCurrentUser
+      description: The logged-in Keycloak user. 401 when there is no session.
+      responses:
+        '200':
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserInfo' }
+        '401':
+          description: Not logged in
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   /api/stream/prices:
     get:
@@ -280,6 +298,16 @@ components:
       properties:
         error: { type: string, description: 'Machine-readable code, e.g. INSUFFICIENT_CASH' }
         message: { type: string }
+
+    UserInfo:
+      type: object
+      required: [id, username]
+      properties:
+        id: { type: string, description: 'Keycloak subject (sub); the user_id of all the user''s data' }
+        username: { type: string }
+        email: { type: string, nullable: true }
+        name: { type: string, nullable: true, description: 'Full name, when set in Keycloak' }
+        authEnabled: { type: boolean, description: 'false when the server runs with authentication disabled' }
 
     Health:
       type: object

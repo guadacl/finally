@@ -2,6 +2,7 @@ package com.finallyapp.stream;
 
 import com.finallyapp.market.PriceCache;
 import com.finallyapp.market.PriceTick;
+import com.finallyapp.security.CurrentUser;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.HashMap;
@@ -50,7 +51,7 @@ public class StreamController {
 
     @GetMapping(path = "/api/stream/notifications", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public ResponseEntity<SseEmitter> streamNotifications() {
-        return sse(notifications.register());
+        return sse(notifications.register(CurrentUser.id()));
     }
 
     /** Every ~500 ms: one {@code price} event per ticker whose price changed timestamp since the last broadcast. */

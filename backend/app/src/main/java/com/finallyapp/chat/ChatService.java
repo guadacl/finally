@@ -1,5 +1,6 @@
 package com.finallyapp.chat;
 
+import com.finallyapp.security.CurrentUser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.finallyapp.api.model.ActionStatus;
 import com.finallyapp.api.model.ChatActions;
@@ -33,7 +34,6 @@ import org.springframework.stereotype.Service;
 public class ChatService {
 
     private static final Logger log = LoggerFactory.getLogger(ChatService.class);
-    static final String USER = "default";
 
     static final String SYSTEM_PROMPT = """
             You are FinAlly, an AI trading assistant inside a simulated trading workstation (fake money, zero stakes).
@@ -198,7 +198,7 @@ public class ChatService {
                         VALUES (:u, :r, :c, CAST(:a AS jsonb))
                         RETURNING id, created_at
                         """)
-                .param("u", USER).param("r", role).param("c", content).param("a", json, java.sql.Types.VARCHAR)
+                .param("u", CurrentUser.id()).param("r", role).param("c", content).param("a", json, java.sql.Types.VARCHAR)
                 .query((rs, i) -> new Saved(rs.getObject(1, UUID.class), rs.getObject(2, OffsetDateTime.class)))
                 .single();
     }
@@ -211,7 +211,7 @@ public class ChatService {
                           WHERE user_id = :u ORDER BY created_at DESC, role DESC LIMIT :n
                         ) m ORDER BY created_at ASC, role DESC
                         """)
-                .param("u", USER).param("n", limit)
+                .param("u", CurrentUser.id()).param("n", limit)
                 .query((rs, i) -> {
                     ChatMessage m = new ChatMessage(rs.getObject(1, UUID.class), ChatRole.fromValue(rs.getString(2)),
                             rs.getString(3), rs.getObject(5, OffsetDateTime.class));

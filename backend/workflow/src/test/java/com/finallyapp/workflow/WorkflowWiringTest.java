@@ -71,7 +71,7 @@ class WorkflowWiringTest {
             assertThat(ctx.getBeanNamesForType(CamundaClient.class)).isNotEmpty();
 
             KanbanCardRef card = new KanbanCardRef(UUID.randomUUID(), "NVDA", KanbanColumn.RESISTANCE,
-                    new BigDecimal("900"));
+                    new BigDecimal("900"), "user-1");
             long t0 = System.nanoTime();
             assertThat(workflow.cardCreated(card)).isNull();
             workflow.targetPriceHit(card, new BigDecimal("901.5"));
@@ -79,8 +79,8 @@ class WorkflowWiringTest {
 
             await().atMost(Duration.ofSeconds(5)).untilAsserted(() ->
                     assertThat(TestApp.PUBLISHED).extracting(Notification::message).containsExactlyInAnyOrder(
-                            "New RESISTANCE card: NVDA @ 900.00",
-                            "NVDA hit resistance 900.00 (now 901.50)"));
+                            "New Take Profit card: NVDA @ 900.00",
+                            "NVDA hit take profit 900.00 (now 901.50)"));
         }
     }
 }
