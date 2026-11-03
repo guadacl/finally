@@ -17,6 +17,13 @@ export interface PriceAlert {
   lowerLimit?: number | null;
   comment?: string | null;
   currentPrice?: number | null;
+  /** Today's high/low (Finnhub quote; simulator: since server start). */
+  dayHigh?: number | null;
+  dayLow?: number | null;
+  /** Shares traded in the last completed session (Massive end-of-day; null without a Massive key). */
+  lastSessionVolume?: number | null;
+  /** Trading day of lastSessionVolume, e.g. "2026-11-02". */
+  lastSessionDate?: string | null;
   createdAt: string;
 }
 

@@ -308,6 +308,9 @@ class AppIntegrationTest {
         assertThat(created.body().path("lowerLimit").decimalValue()).isEqualByComparingTo("400.5");
         assertThat(created.body().path("comment").asText()).isEqualTo("earnings week");
         assertThat(created.body().path("currentPrice").isNumber()).isTrue();
+        assertThat(created.body().path("dayHigh").isNumber()).isTrue();   // simulator ticks build the day range
+        assertThat(created.body().path("dayLow").decimalValue()).isLessThanOrEqualTo(created.body().path("dayHigh").decimalValue());
+        assertThat(created.body().path("lastSessionVolume").isNumber()).isFalse(); // no Massive key in tests
         String id = created.body().path("id").asText();
 
         assertThat(call("POST", "/api/alerts", "{\"ticker\":\"AAPL\",\"lowerLimit\":150}").status()).isEqualTo(201);

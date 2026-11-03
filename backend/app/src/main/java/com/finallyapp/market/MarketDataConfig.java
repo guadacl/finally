@@ -19,8 +19,12 @@ public class MarketDataConfig {
 
     @Bean(destroyMethod = "stop")
     MarketDataSource marketDataSource(FinallyProperties props, PriceCache cache,
-                                      RestClient.Builder builder, ObjectMapper mapper) {
-        return create(props.market(), cache, builder, mapper);
+                                      RestClient.Builder builder, ObjectMapper mapper, DayRangeCache dayRanges) {
+        MarketDataSource source = create(props.market(), cache, builder, mapper);
+        if (source instanceof FinnhubMarketDataSource finnhub) {
+            finnhub.setDayRangeSink(dayRanges::report); // real day high/low from each quote
+        }
+        return source;
     }
 
     public static MarketDataSource create(FinallyProperties.Market cfg, PriceCache cache,

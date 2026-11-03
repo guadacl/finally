@@ -1,13 +1,16 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { PriceAlert, errorMessage } from '../../api/models';
-import { AlertStatus, AlertsService, MAX_ALERT_COMMENT, alertStatus, buildAlert } from '../../core/alerts.service';
+import { AlertStatus, AlertsService, MAX_ALERT_COMMENT, alertStatus, buildAlert, liveDayRange } from '../../core/alerts.service';
 import { PriceStreamService } from '../../core/price-stream.service';
 import { WatchlistService } from '../../core/watchlist.service';
-import { PricePipe } from '../../shared/format';
+import { PricePipe, VolumePipe } from '../../shared/format';
 import { PriceFlashDirective } from '../../shared/price-flash.directive';
+
+/** How often the list is reloaded for fresh day high/low and volume. */
+export const REFRESH_MS = 30_000;
 
 const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
   above: { label: 'Above upper', cls: 'bg-up/15 text-up' },
@@ -19,7 +22,7 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
 @Component({
   selector: 'app-alerts-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, DatePipe, PricePipe, PriceFlashDirective],
+  imports: [FormsModule, RouterLink, DatePipe, PricePipe, VolumePipe, PriceFlashDirective],
   host: { class: 'block h-full' },
   template: `
     <section class="panel mx-auto flex h-full max-w-6xl flex-col overflow-hidden">
@@ -98,6 +101,9 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
               <tr class="border-b border-edge">
                 <th class="px-3 py-2 text-left">Ticker</th>
                 <th class="px-3 py-2 text-right">Price</th>
+                <th class="px-3 py-2 text-right" title="Lowest price of the current trading day">Day low</th>
+                <th class="px-3 py-2 text-right" title="Highest price of the current trading day">Day high</th>
+                <th class="px-3 py-2 text-right" title="Shares traded in the last completed trading session">Vol (last session)</th>
                 <th class="px-3 py-2 text-right">Lower limit</th>
                 <th class="px-3 py-2 text-right">Upper limit</th>
                 <th class="px-3 py-2 text-left">Status</th>
@@ -111,6 +117,10 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
                 <tr class="border-b border-edge/60 hover:bg-panel-2" [attr.data-testid]="'alerts-row-' + a.id" [attr.data-status]="status(a)">
                   <td class="px-3 py-2 font-bold">{{ a.ticker }}</td>
                   <td class="num px-3 py-2 text-right"><span class="rounded px-1" [appPriceFlash]="livePrice(a)">{{ livePrice(a) | price }}</span></td>
+                  <td class="num px-3 py-2 text-right text-muted" [attr.data-testid]="'alerts-daylow-' + a.id">{{ dayRange(a).low | price }}</td>
+                  <td class="num px-3 py-2 text-right text-muted" [attr.data-testid]="'alerts-dayhigh-' + a.id">{{ dayRange(a).high | price }}</td>
+                  <td class="num px-3 py-2 text-right text-muted" [attr.data-testid]="'alerts-volume-' + a.id"
+                    [attr.title]="a.lastSessionDate ? 'Session of ' + (a.lastSessionDate | date: 'EEE d MMM') : 'Volume needs a Massive API key'">{{ a.lastSessionVolume | volume }}</td>
                   <td class="num px-3 py-2 text-right text-down">{{ a.lowerLimit != null ? (a.lowerLimit | price) : '—' }}</td>
                   <td class="num px-3 py-2 text-right text-up">{{ a.upperLimit != null ? (a.upperLimit | price) : '—' }}</td>
                   <td class="px-3 py-2">
@@ -134,6 +144,7 @@ export class AlertsPage implements OnInit {
   readonly alerts = inject(AlertsService);
   private readonly watchlist = inject(WatchlistService);
   private readonly prices = inject(PriceStreamService);
+  private readonly destroyRef = inject(DestroyRef);
 
   readonly maxComment = MAX_ALERT_COMMENT;
   readonly formOpen = signal(false);
@@ -149,6 +160,9 @@ export class AlertsPage implements OnInit {
 
   ngOnInit(): void {
     this.alerts.load();
+    // refresh day high/low and volume while the page is open (live prices come from the stream)
+    const timer = setInterval(() => this.alerts.load(), REFRESH_MS);
+    this.destroyRef.onDestroy(() => clearInterval(timer));
     if (this.watchlist.items().length === 0) {
       this.watchlist.load();
     }
@@ -196,6 +210,10 @@ export class AlertsPage implements OnInit {
 
   livePrice(a: PriceAlert): number | null {
     return this.prices.price(a.ticker) ?? a.currentPrice ?? null;
+  }
+
+  dayRange(a: PriceAlert): { high: number | null; low: number | null } {
+    return liveDayRange(a.dayHigh, a.dayLow, this.livePrice(a));
   }
 
   status(a: PriceAlert): AlertStatus {

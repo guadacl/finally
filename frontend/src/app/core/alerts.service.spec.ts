@@ -2,7 +2,8 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { PriceAlert } from '../api/models';
-import { AlertsService, alertStatus, buildAlert } from './alerts.service';
+import { fmtVolume } from '../shared/format';
+import { AlertsService, alertStatus, buildAlert, liveDayRange } from './alerts.service';
 
 const alert = (id: string, ticker = 'AAPL'): PriceAlert => ({ id, ticker, upperLimit: 200, lowerLimit: 150, createdAt: '2026-11-03T10:00:00Z' });
 
@@ -34,6 +35,27 @@ describe('alertStatus', () => {
     expect(alertStatus(150, 100, 200)).toBe('inside');
     expect(alertStatus(150, null, 200)).toBe('inside');
     expect(alertStatus(50, 100, null)).toBe('below');
+  });
+});
+
+describe('liveDayRange', () => {
+  it('widens the server day range with the live price', () => {
+    expect(liveDayRange(110, 100, 105)).toEqual({ high: 110, low: 100 });
+    expect(liveDayRange(110, 100, 112)).toEqual({ high: 112, low: 100 });
+    expect(liveDayRange(110, 100, 99)).toEqual({ high: 110, low: 99 });
+    expect(liveDayRange(null, null, 50)).toEqual({ high: 50, low: 50 });
+    expect(liveDayRange(null, null, null)).toEqual({ high: null, low: null });
+  });
+});
+
+describe('fmtVolume', () => {
+  it('formats share volume compactly', () => {
+    expect(fmtVolume(64_757_691)).toBe('64.76M');
+    expect(fmtVolume(950_000)).toBe('950K');
+    expect(fmtVolume(1_200_000_000)).toBe('1.2B');
+    expect(fmtVolume(21_000_000)).toBe('21M');
+    expect(fmtVolume(512)).toBe('512');
+    expect(fmtVolume(null)).toBe('—');
   });
 });
 

@@ -1,6 +1,10 @@
 spring:
   application:
     name: finally
+  session:
+    jdbc:
+      # creates the SPRING_SESSION tables in Postgres on first start (sessions survive app restarts)
+      initialize-schema: always
   config:
     # finally-workflow.yml comes from the workflow module jar (Camunda client settings).
     # The project-root .env is loaded for local runs (cwd = repo root, backend/ or backend/app); in Docker it is
@@ -49,6 +53,8 @@ server:
         name: FINALLY_SESSION
         same-site: lax
         http-only: true
+      # match the Keycloak SSO idle time so users are not logged out of the app much earlier
+      timeout: 8h
   shutdown: graceful
   compression:
     enabled: true

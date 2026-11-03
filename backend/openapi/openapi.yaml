@@ -575,6 +575,10 @@ components:
         lowerLimit: { type: number, nullable: true }
         comment: { type: string, nullable: true }
         currentPrice: { type: number, nullable: true, description: 'Live price, null until the first price arrives' }
+        dayHigh: { type: number, nullable: true, description: 'Highest price of the current trading day (Finnhub quote; simulator: since server start)' }
+        dayLow: { type: number, nullable: true, description: 'Lowest price of the current trading day' }
+        lastSessionVolume: { type: integer, format: int64, nullable: true, description: 'Shares traded in the last completed session (Massive end-of-day data; null without a Massive key)' }
+        lastSessionDate: { type: string, format: date, nullable: true, description: 'Trading day the volume refers to' }
         createdAt: { type: string, format: date-time }
 
     PriceAlertCreate:

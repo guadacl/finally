@@ -30,7 +30,16 @@ public class FinnhubMarketDataSource implements MarketDataSource {
     static final Duration RATE_LIMIT_BACKOFF = Duration.ofSeconds(15);
 
     /** One parsed quote. */
-    public record Quote(String ticker, double price, Instant timestamp) {
+    /** One parsed quote; {@code high}/{@code low} are the day range (NaN when Finnhub sent none). */
+    public record Quote(String ticker, double price, Instant timestamp, double high, double low) {
+        public Quote(String ticker, double price, Instant timestamp) {
+            this(ticker, price, timestamp, Double.NaN, Double.NaN);
+        }
+    }
+
+    /** Receives the day high/low of every quote (set by the market data config). */
+    public interface DayRangeSink {
+        void report(String ticker, java.math.BigDecimal high, java.math.BigDecimal low, Instant asOf);
     }
 
     private final PriceCache cache;
@@ -40,6 +49,7 @@ public class FinnhubMarketDataSource implements MarketDataSource {
     private final List<String> tickers = new CopyOnWriteArrayList<>();
     private final AtomicInteger cursor = new AtomicInteger();
     private volatile Instant pausedUntil = Instant.EPOCH;
+    private volatile DayRangeSink dayRangeSink;
     private ScheduledExecutorService executor;
 
     public FinnhubMarketDataSource(PriceCache cache, RestClient.Builder builder, String baseUrl, String apiKey,
@@ -50,6 +60,10 @@ public class FinnhubMarketDataSource implements MarketDataSource {
         this.client = builder.baseUrl(baseUrl)
                 .defaultHeader("X-Finnhub-Token", apiKey)
                 .build();
+    }
+
+    public void setDayRangeSink(DayRangeSink sink) {
+        this.dayRangeSink = sink;
     }
 
     @Override
@@ -116,6 +130,10 @@ public class FinnhubMarketDataSource implements MarketDataSource {
             parseQuote(ticker, body).ifPresent(q -> {
                 if (tickers.contains(q.ticker())) {
                     cache.update(q.ticker(), q.price(), q.timestamp());
+                    DayRangeSink sink = dayRangeSink;
+                    if (sink != null && q.high() > 0 && q.low() > 0) {
+                        sink.report(q.ticker(), java.math.BigDecimal.valueOf(q.high()), java.math.BigDecimal.valueOf(q.low()), q.timestamp());
+                    }
                 }
             });
         } catch (HttpClientErrorException.TooManyRequests e) {
@@ -144,7 +162,9 @@ public class FinnhubMarketDataSource implements MarketDataSource {
             }
             JsonNode t = root.path("t");
             Instant when = t.isNumber() && t.asLong() > 0 ? Instant.ofEpochSecond(t.asLong()) : Instant.now();
-            return Optional.of(new Quote(ticker.toUpperCase(), c.asDouble(), when));
+            double high = root.path("h").isNumber() ? root.path("h").asDouble() : Double.NaN;
+            double low = root.path("l").isNumber() ? root.path("l").asDouble() : Double.NaN;
+            return Optional.of(new Quote(ticker.toUpperCase(), c.asDouble(), when, high, low));
         } catch (Exception e) {
             log.warn("Unparseable Finnhub response for {}: {}", ticker, e.getMessage());
             return Optional.empty();

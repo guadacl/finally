@@ -48,6 +48,21 @@ class FinnhubMarketDataSourceTest {
     }
 
     @Test
+    void parsesDayHighLowAndReportsThem() {
+        var q = source.parseQuote("AAPL", AAPL).orElseThrow();
+        assertThat(q.high()).isEqualTo(263.31);
+        assertThat(q.low()).isEqualTo(260.68);
+
+        java.util.List<String> reported = new java.util.ArrayList<>();
+        source.setDayRangeSink((t, h, l, at) -> reported.add(t + " " + h.toPlainString() + " " + l.toPlainString()));
+        source.addTicker("AAPL");
+        server.expect(once(), queryParam("symbol", "AAPL")).andRespond(withSuccess(AAPL, MediaType.APPLICATION_JSON));
+        source.pollNext();
+        server.verify();
+        assertThat(reported).containsExactly("AAPL 263.31 260.68");
+    }
+
+    @Test
     void unknownSymbolAndMalformedBodiesAreSkipped() {
         assertThat(source.parseQuote("ZZZZ", "{\"c\":0,\"d\":null,\"dp\":null,\"h\":0,\"l\":0,\"o\":0,\"pc\":0,\"t\":0}")).isEmpty();
         assertThat(source.parseQuote("AAPL", "not json")).isEmpty();

@@ -15,6 +15,21 @@ export function alertStatus(price: number | null | undefined, lower?: number | n
   return 'inside';
 }
 
+/**
+ * Day range shown for an alert: the server's day high/low (from the market data source), widened by the live
+ * price so a new high/low appears immediately instead of at the next refresh.
+ */
+export function liveDayRange(
+  high: number | null | undefined,
+  low: number | null | undefined,
+  price: number | null | undefined,
+): { high: number | null; low: number | null } {
+  const usable = (vs: (number | null | undefined)[]) => vs.filter((v): v is number => v != null && Number.isFinite(v) && v > 0);
+  const highs = usable([high, price]);
+  const lows = usable([low, price]);
+  return { high: highs.length ? Math.max(...highs) : null, low: lows.length ? Math.min(...lows) : null };
+}
+
 /** Parses an optional price field: '' → null, otherwise a positive number (or an error message). */
 function parseLimit(raw: string, label: string): number | null | string {
   const text = (raw ?? '').trim().replace(',', '.');

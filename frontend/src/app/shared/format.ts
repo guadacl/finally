@@ -20,6 +20,23 @@ export function fmtPct(v: number | null | undefined): string {
   return `${v > 0 ? '+' : ''}${v.toFixed(2)}%`;
 }
 
+/** Share volume, compact: 64,757,691 → "64.76M", 950,000 → "950K". */
+export function fmtVolume(v: number | null | undefined): string {
+  if (v == null || !Number.isFinite(v) || v < 0) return '—';
+  const units: [number, string][] = [[1e9, 'B'], [1e6, 'M'], [1e3, 'K']];
+  for (const [size, unit] of units) {
+    if (v >= size) return `${(v / size).toFixed(2).replace(/\.?0+$/, '')}${unit}`;
+  }
+  return String(Math.round(v));
+}
+
+@Pipe({ name: 'volume' })
+export class VolumePipe implements PipeTransform {
+  transform(v: number | null | undefined): string {
+    return fmtVolume(v);
+  }
+}
+
 export function fmtQty(v: number | null | undefined): string {
   if (v == null || !Number.isFinite(v)) return '—';
   return qty.format(v);
