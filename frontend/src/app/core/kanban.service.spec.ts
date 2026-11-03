@@ -45,11 +45,18 @@ describe('sortByDistance', () => {
     expect(cardDistance(110, null)).toBeNull();
   });
 
-  it('orders by DIST ascending, cards without a price last, ties in saved order', () => {
-    const prices: Record<string, number | null> = { a: 100, b: 100, c: null, d: 100, e: 100 };
-    const cards = [card('c', 'SUPPORT', 0, 50), card('a', 'SUPPORT', 1, 95), card('b', 'SUPPORT', 2, 80), card('d', 'SUPPORT', 3, 95), card('e', 'SUPPORT', 4, 120)];
+  it('orders by |DIST| ascending (nearest target first), cards without a price last, ties in saved order', () => {
+    const prices: Record<string, number | null> = { a: 100, b: 100, c: null, d: 100, e: 100, f: 100 };
+    const cards = [
+      card('c', 'SUPPORT', 0, 50),
+      card('a', 'SUPPORT', 1, 95),
+      card('b', 'SUPPORT', 2, 70),
+      card('d', 'SUPPORT', 3, 105),
+      card('e', 'SUPPORT', 4, 120),
+      card('f', 'SUPPORT', 5, 98),
+    ];
     const ids = sortByDistance(cards, (c) => prices[c.id]).map((c) => c.id);
-    expect(ids).toEqual(['b', 'a', 'd', 'e', 'c']); // -20%, -5%, -5%, +20%, no price
+    expect(ids).toEqual(['f', 'a', 'd', 'e', 'b', 'c']); // 2%, 5%, 5% (tie, saved order), 20%, 30%, no price
   });
 });
 

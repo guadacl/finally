@@ -117,7 +117,7 @@ export class KanbanBoardComponent {
   /** Live price of a card (stream first, then the price the server sent with the card). */
   private readonly priceOf = (card: KanbanCard) => this.prices.state(card.ticker)()?.price ?? card.currentPrice ?? null;
 
-  /** Each column ordered by DIST ascending; re-sorts as prices stream in. */
+  /** Each column ordered by |DIST| ascending (nearest target first); re-sorts as prices stream in. */
   private readonly sorted = computed<Record<KanbanColumn, KanbanCard[]>>(() => ({
     SUPPORT: sortByDistance(this.kanban.support(), this.priceOf),
     RESISTANCE: sortByDistance(this.kanban.resistance(), this.priceOf),
@@ -155,7 +155,7 @@ export class KanbanBoardComponent {
 
   drop(event: CdkDragDrop<KanbanCard[]>, target: KanbanColumn): void {
     const source: KanbanColumn = event.previousContainer.id.endsWith('RESISTANCE') ? 'RESISTANCE' : 'SUPPORT';
-    // Order inside a column is automatic (DIST ascending): only moves between columns count.
+    // Order inside a column is automatic (|DIST| ascending): only moves between columns count.
     if (source === target) return;
     const lists: Record<KanbanColumn, KanbanCard[]> = {
       SUPPORT: [...this.kanban.support()],

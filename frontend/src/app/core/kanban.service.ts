@@ -33,12 +33,15 @@ export function cardDistance(target: number, price: number | null | undefined): 
 }
 
 /**
- * Column display order: DIST ascending (signed, as shown on the cards). Cards without a price go
- * last; ties keep the saved order.
+ * Column display order: |DIST| ascending, so the card closest to its target (to triggering) is on
+ * top, whichever side of the price it sits. Cards without a price go last; ties keep the saved order.
  */
 export function sortByDistance(cards: readonly KanbanCard[], priceOf: (card: KanbanCard) => number | null | undefined): KanbanCard[] {
   return cards
-    .map((card, i) => ({ card, i, d: cardDistance(card.targetPrice, priceOf(card)) }))
+    .map((card, i) => {
+      const d = cardDistance(card.targetPrice, priceOf(card));
+      return { card, i, d: d == null ? null : Math.abs(d) };
+    })
     .sort((a, b) => (a.d == null ? 1 : 0) - (b.d == null ? 1 : 0) || (a.d ?? 0) - (b.d ?? 0) || a.i - b.i)
     .map((x) => x.card);
 }
