@@ -24,6 +24,14 @@ services:
       # Used by the realm import placeholders (client secret, redirect URIs)
       KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET:-finally-dev-secret}
       APP_PORT: ${APP_PORT:-8000}
+      # Social login (realm import only; an existing realm is updated with keycloak/scripts/apply-social-idps.*).
+      # A provider is enabled only when its client ID is set, otherwise its button is hidden.
+      KEYCLOAK_GOOGLE_ENABLED: ${KEYCLOAK_GOOGLE_CLIENT_ID:+true}
+      KEYCLOAK_GOOGLE_CLIENT_ID: ${KEYCLOAK_GOOGLE_CLIENT_ID:-}
+      KEYCLOAK_GOOGLE_CLIENT_SECRET: ${KEYCLOAK_GOOGLE_CLIENT_SECRET:-}
+      KEYCLOAK_FACEBOOK_ENABLED: ${KEYCLOAK_FACEBOOK_CLIENT_ID:+true}
+      KEYCLOAK_FACEBOOK_CLIENT_ID: ${KEYCLOAK_FACEBOOK_CLIENT_ID:-}
+      KEYCLOAK_FACEBOOK_CLIENT_SECRET: ${KEYCLOAK_FACEBOOK_CLIENT_SECRET:-}
     ports:
       # loopback only: the login page must be reachable from this machine's browser, not from the network
       - "127.0.0.1:${KEYCLOAK_HOST_PORT:-8180}:8080"
@@ -31,6 +39,8 @@ services:
       # whole data dir: the image owns it (uid 1000); a new subfolder would be created root-owned and unwritable
       - finally-keycloak:/opt/keycloak/data
       - ./realm:/opt/keycloak/data/import:ro
+      # FinAlly login theme (realm "loginTheme": "finally"); start-dev disables theme caching, so edits show on reload
+      - ./themes/finally:/opt/keycloak/themes/finally:ro
     healthcheck:
       # The image has no curl/wget: raw HTTP over bash /dev/tcp against the management port.
       test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9000 && printf \"GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n\" >&3 && grep -q \"UP\" <&3'"]

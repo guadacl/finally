@@ -1,7 +1,6 @@
 package com.finallyapp.contracts;
 
 import java.math.BigDecimal;
-import java.util.UUID;
 
 /**
  * Drives the Camunda {@code kanban-card} process for each kanban card.
@@ -25,6 +24,11 @@ public interface KanbanWorkflow {
     /** Live price reached the card's target (correlates message {@code target-price-hit}). */
     void targetPriceHit(KanbanCardRef card, BigDecimal price);
 
-    /** Card deleted (correlates message {@code card-deleted}, ending the process instance). */
-    void cardDeleted(UUID cardId);
+    /**
+     * Card deleted (correlates message {@code card-deleted} with the card's last ticker / column / target / owner;
+     * the process then sends the CARD_DELETED toast and email and ends). Call with the values read
+     * <em>before</em> the database row was removed. {@code processInstanceKey} (may be null) lets the
+     * implementation cancel the instance if the message cannot be correlated.
+     */
+    void cardDeleted(KanbanCardRef card, Long processInstanceKey);
 }

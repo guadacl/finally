@@ -1,0 +1,27 @@
+# Mailpit for FinAlly (included by the root docker-compose.yml) - LOCAL DEV ONLY.
+#
+# Catches every alert email (sent by the email-mcp service's send_email tool) instead of delivering it.
+#   Web UI (read the emails):  http://localhost:8025
+#   SMTP (used by email-mcp):  mailpit:1025 on the compose network, 127.0.0.1:1025 on the host
+# To send real emails instead, set MAIL_HOST / MAIL_PORT / MAIL_USERNAME / MAIL_PASSWORD / MAIL_STARTTLS in .env.
+# Standalone:  docker compose -f mailpit/compose.mailpit.yml up -d
+
+services:
+  mailpit:
+    image: axllent/mailpit:v1.27
+    container_name: finally-mailpit
+    environment:
+      MP_MAX_MESSAGES: 500
+      # accept any SMTP login (and none) over plain SMTP - it is a local catch-all
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    ports:
+      - "127.0.0.1:${MAILPIT_WEB_HOST_PORT:-8025}:8025"
+      - "127.0.0.1:${MAILPIT_SMTP_HOST_PORT:-1025}:1025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped

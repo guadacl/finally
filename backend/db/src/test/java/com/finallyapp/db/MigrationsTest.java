@@ -72,7 +72,7 @@ class MigrationsTest {
     @Order(1)
     void migrationsApplyCleanlyOnEmptyDatabase() throws SQLException {
         assertThat(firstRun.success).isTrue();
-        assertThat(firstRun.migrationsExecuted).isEqualTo(3);
+        assertThat(firstRun.migrationsExecuted).isEqualTo(5);
         assertThat(flyway().validateWithResult().validationSuccessful).isTrue();
 
         List<String> tables = new ArrayList<>();
@@ -93,6 +93,10 @@ class MigrationsTest {
                 + "'idx_trades_user_executed_at','idx_portfolio_snapshots_user_recorded_at',"
                 + "'idx_chat_messages_user_created_at','idx_kanban_cards_user_column_sort','idx_price_alerts_user_created')"))
                 .isEqualTo(5);
+
+        // V5: nullable users_profile.email (alert emails)
+        assertThat(count("SELECT count(*) FROM information_schema.columns WHERE table_name = 'users_profile' "
+                + "AND column_name = 'email' AND data_type = 'text' AND is_nullable = 'YES'")).isEqualTo(1);
     }
 
     @Test

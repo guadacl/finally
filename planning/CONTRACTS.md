@@ -58,7 +58,8 @@ Flyway location `classpath:db/migration` (files live in `backend/db/src/main/res
 users_profile(
   id            TEXT PRIMARY KEY DEFAULT 'default',
   cash_balance  NUMERIC(18,4) NOT NULL DEFAULT 10000.0000,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now())
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  email         TEXT NULL)          -- V5: Keycloak account email, synced by the app on the user's requests
 
 watchlist(
   id        UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -129,7 +130,8 @@ API: GET /api/alerts, POST /api/alerts {ticker, upperLimit?, lowerLimit?, commen
 
 Alerts page behaviour:
 - Each row also shows `rsi`: RSI(14), Wilder smoothing, on daily closes from Massive end-of-day aggregates (`DailyCloses`, ~150 calendar days, one ticker per 20 s, cached per day), with the live price as today's close during the session. `null` without `MASSIVE_API_KEY` or until the history has loaded. UI: ≥ 70 overbought, ≤ 30 oversold.
-- Adding an alert also creates kanban cards: `lowerLimit` → a SUPPORT card, `upperLimit` → a RESISTANCE card (frontend, via `POST /api/kanban`; deleting the alert leaves the cards).
+- Adding an alert also creates kanban cards: `lowerLimit` → a SUPPORT card, `upperLimit` → a RESISTANCE card (frontend, via `POST /api/kanban`; deleting the alert leaves the cards). The alert form's comment is copied onto those cards.
+- The alerts list does **not** show a comment column; comments live on the kanban cards (`kanban_cards.comment`, V4, ≤ 500 chars). Each card's target price and comment are editable inline (`PATCH /api/kanban/{id}` with `targetPrice` and/or `comment`; `comment: ""` clears it; a comment edit does not re-arm the card or notify Camunda). `price_alerts.comment` is still stored but no longer displayed.
 
 Indexes: `trades(user_id, executed_at)`, `portfolio_snapshots(user_id, recorded_at)`, `chat_messages(user_id, created_at)`, `kanban_cards(user_id, column_name, sort_order)`.
 
@@ -143,15 +145,23 @@ Seed (a separate migration, idempotent with `ON CONFLICT DO NOTHING`): profile `
 - Fire only when `armed = true`; then set `armed = false`. Re-arm (`armed = true`) when the condition becomes false again, when the target price is edited, or when the card moves column.
 - The **Backend** evaluates alerts on each price update (in memory, persisting `armed` changes) and calls `KanbanWorkflow.targetPriceHit(...)`.
 - The DB is the source of truth for a card's column; Camunda mirrors it in the process variable `column`.
+- **Emails** (toasts unchanged): the card owner is emailed at `users_profile.email` for **`CARD_CREATED`, `CARD_DELETED` and `TARGET_HIT`** — never `CARD_MOVED` (`NotificationEmailer.EMAILED`).
+  - *Camunda path*: every emailed event runs its toast task (`finally-notify`) and then an **`email-notify`** service task with the same `notificationType` header: after "Notify: card created in Support/Resistance" (both gateway branches), after "Notify: card deleted" (main flow, after the `card-deleted` catch event, before the end event) and after "Notify: target price hit" (event subprocess). `EmailNotifyJobWorker` (workflow module) builds the `Notification` from the job variables and calls the contract `NotificationEmailer.send(...)`; it **always completes the job** (no incidents, no retries on mail failure).
+  - *Deletion*: `KanbanService.delete` reads the card first and calls `KanbanWorkflow.cardDeleted(card, processInstanceKey)`; the `card-deleted` message carries `ticker`, `column`, `targetPrice`, `userId`. Instances of an older process version (created before deletion emails existed) end without emailing; after a successful correlation the workflow checks the instance's process definition (cached) and, for such versions, sends the deletion toast + email directly. If the message cannot be correlated, the fallback sends them and the instance is cancelled by its key.
+  - *Fallback path* (Camunda down / correlation failed): `DirectKanbanWorkflow` publishes the toast and calls `NotificationEmailer` for created / deleted / target hit. So each event is emailed exactly once on either path; Camunda job re-deliveries keep the notification id (derived from the job key) and are de-duplicated.
+  - `NotificationMailer` (app, implements `NotificationEmailer`): asynchronous (one background thread, bounded queue), never throws; skipped when `MAIL_ENABLED=false`, `EMAIL_MCP_URL` is empty, there is no owner, or the owner has no email. It calls `McpEmailGateway`, an MCP client (Java MCP SDK 2.1.0, `mcp-core` + `mcp-json-jackson2`, Streamable HTTP transport) for the tool **`send_email {to, subject, text, html?}`** of the email MCP server (`mcp/email-mcp-server`, Node + `@modelcontextprotocol/sdk` + nodemailer, provider-agnostic SMTP). Each call is bounded by `EMAIL_MCP_TIMEOUT` (10 s).
+  - Subjects: `FinAlly: new Support card AAPL @ 185.00`, `FinAlly: Support card AAPL @ 185.00 deleted`, `FinAlly alert: AAPL hit Support 185.00`. Plain-text body with ticker, Support/Resistance (and its rule), target, current price (target hit), time (UTC) and a link to `${APP_PUBLIC_URL}/alerts`.
+  - Address: copied from the OIDC `email` claim into `users_profile.email` by `UserEmailSyncFilter` on the user's requests (written only when it changes); it is not fetched from the Keycloak admin API.
 
 ## 6. Camunda contract (Camunda agent implements)
 
 - BPMN process id: `kanban-card`. BPMN file(s) live in `camunda/bpmn/` and are deployed by the `workflow` module at startup (the module's `pom.xml` adds `../../camunda/bpmn` as a resource directory).
 - Correlation key for all messages: `cardId` (UUID string).
 - Process variables: `cardId`, `ticker`, `column`, `targetPrice` (number), `price` (number, when known).
-- Messages: `card-moved` (vars: `column`, `targetPrice`), `target-price-hit` (vars: `price`), `card-deleted` (ends the instance).
+- Messages: `card-moved` (vars: `column`, `targetPrice`), `target-price-hit` (vars: `price`), `card-deleted` (vars: `ticker`, `column`, `targetPrice`, `userId`; the main flow then sends the CARD_DELETED toast and email and ends the instance).
 - Must contain an **exclusive gateway on `column`** after the start event, routing to notification tasks for "card created in SUPPORT" / "card created in RESISTANCE".
 - All notifications are sent by a **service task with job type `finally-notify`**; a Spring job worker in `workflow` handles it and calls `NotificationPublisher.publish(...)`. The worker must be idempotent-safe (Camunda may retry).
+- Card created (both gateway branches), card deleted and target price hit each run `finally-notify` (toast) and then **`email-notify`** (same `notificationType` header), handled by `EmailNotifyJobWorker` → `NotificationEmailer` (§5). Card moved has no `email-notify` task. The deletion email task has the element id `Task_EmailCardDeleted`.
 - `KanbanWorkflow` implementation (`com.finallyapp.workflow`): every method must catch Camunda errors, log them, and **fall back to publishing the notification directly** via `NotificationPublisher` so alerts still reach the browser if Camunda is down. Methods must not block the caller for more than ~2 s.
 - When property `finally.workflow.enabled=false`, a no-op-to-Camunda implementation (which still publishes notifications directly) is used instead. Backend tests run with this set to `false`.
 
@@ -163,6 +173,8 @@ Already written by the orchestrator — read them, don't edit:
 - `KanbanWorkflow` — implemented by `workflow`, called by `app`
 - `Notification`, `NotificationType` — the notification payload
 - `NotificationPublisher` — implemented by `app` (pushes to SSE), called by `workflow`
+- `NotificationEmailer` — implemented by `app` (`NotificationMailer`: email via the email MCP server), called by `workflow` (`email-notify` worker and the direct fallback); non-blocking, never throws; emails `CARD_CREATED`, `CARD_DELETED`, `TARGET_HIT`
+- `KanbanWorkflow.cardDeleted(KanbanCardRef card, Long processInstanceKey)` — called with the card read before its row is deleted
 
 ## 8. SSE events
 
@@ -176,7 +188,7 @@ Already written by the orchestrator — read them, don't edit:
 ```json
 {"id":"uuid","type":"TARGET_HIT","cardId":"uuid","ticker":"AAPL","column":"SUPPORT","targetPrice":185.0,"price":184.97,"message":"AAPL hit support 185.00 (now 184.97)","createdAt":"2026-11-02T10:00:00Z"}
 ```
-`type` ∈ `CARD_CREATED | CARD_MOVED | TARGET_HIT`. Both streams send a comment heartbeat (`: ping`) every 15 s.
+`type` ∈ `CARD_CREATED | CARD_MOVED | TARGET_HIT | CARD_DELETED` (CARD_DELETED message e.g. `Support card deleted: AAPL @ 185.00`). Both streams send a comment heartbeat (`: ping`) every 15 s.
 
 ## 9. LLM (Backend agent)
 
@@ -198,23 +210,32 @@ Already written by the orchestrator — read them, don't edit:
 | `KEYCLOAK_INTERNAL_URL` | app | empty → `KEYCLOAK_URL`; in Docker `http://keycloak:8080` |
 | `KEYCLOAK_REALM` / `KEYCLOAK_CLIENT_ID` / `KEYCLOAK_CLIENT_SECRET` | app, keycloak | `finally` / `finally-app` / `finally-dev-secret` |
 | `KEYCLOAK_HOST_PORT` / `KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD` | keycloak | `8180` / `admin` / `admin` |
+| `KEYCLOAK_GOOGLE_CLIENT_ID` / `KEYCLOAK_GOOGLE_CLIENT_SECRET` / `KEYCLOAK_FACEBOOK_CLIENT_ID` / `KEYCLOAK_FACEBOOK_CLIENT_SECRET` | keycloak (realm import), `keycloak/scripts/apply-social-idps.*` | empty → that "Sign in with ..." button is hidden (IdP disabled); see `keycloak/README.md` "Social login" |
 | `LLM_MOCK` | app | `false` |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | postgres, app | `finally` / `finally` / `finally` |
 | `SPRING_DATASOURCE_URL` | app | `jdbc:postgresql://postgres:5432/finally` |
 | `CAMUNDA_GRPC_ADDRESS` | app | `http://camunda:26500` |
 | `CAMUNDA_REST_ADDRESS` | app | `http://camunda:8080` |
 | `FINALLY_WORKFLOW_ENABLED` | app | `true` |
+| `MAIL_ENABLED` | app | `true`; `false` = never send alert emails |
+| `EMAIL_MCP_URL` / `EMAIL_MCP_TIMEOUT` | app | empty → no emails (local run); compose `http://email-mcp:3001/mcp` / `10s` |
+| `APP_PUBLIC_URL` | app | `http://localhost:8000` (link in alert emails; compose: `http://localhost:${APP_PORT}`) |
+| `MAIL_HOST` / `MAIL_PORT` | email-mcp | `localhost` / `1025`; compose `mailpit` / `1025` |
+| `MAIL_USERNAME` / `MAIL_PASSWORD` / `MAIL_STARTTLS` / `MAIL_SECURE` | email-mcp | empty / empty / `false` / `true` on port 465 |
+| `MAIL_FROM` | email-mcp | `FinAlly <alerts@finally.local>` |
+| `MCP_PORT` / `MCP_PATH` | email-mcp | `3001` / `/mcp` |
+| `MAILPIT_WEB_HOST_PORT` / `MAILPIT_SMTP_HOST_PORT` | mailpit | `8025` / `1025` |
 
-Ports: app `8000` (public), Keycloak `8180 → 8080` (loopback only), Camunda web apps (Operate/Tasklist) `8081 → 8080` on host, Postgres `5432` (dev only).
+Ports: app `8000` (public), Keycloak `8180 → 8080` (loopback only), Mailpit web UI `8025` and SMTP `1025` (loopback only, service `mailpit` in `mailpit/compose.mailpit.yml`), email MCP server `3001` (internal only, service `email-mcp` in `mcp/email-mcp-server/compose.email-mcp.yml`), Camunda web apps (Operate/Tasklist) `8081 → 8080` on host, Postgres `5432` (dev only).
 
 For local dev outside Docker, `localhost` replaces the service names; `docker compose up postgres camunda` starts just the infrastructure.
 
 ## 11. Authentication (Keycloak)
 
-- **Keycloak 26** runs as the compose service `keycloak` (`keycloak/compose.keycloak.yml`); realm `finally` is imported from `keycloak/realm/finally-realm.json` on first start. Self-registration, password reset and "remember me" are on. Dev user: `demo` / `demo1234`.
+- **Keycloak 26** runs as the compose service `keycloak` (`keycloak/compose.keycloak.yml`); realm `finally` is imported from `keycloak/realm/finally-realm.json` on first start. Self-registration, password reset and "remember me" are on. Dev user: `demo` / `demo1234`. Optional social login (Identity Brokering): IdPs `google` and `facebook`, enabled only when their client ID/secret are set; a brokered user is a normal Keycloak user (own `sub`, email imported from the provider), and a login whose email matches an existing account links to it after the user re-enters that account's password (default "first broker login" flow).
 - **Backend for frontend**: Spring Security (`spring-boot-starter-oauth2-client`) runs the OIDC authorization-code flow with the confidential client `finally-app` and keeps the login in the server session cookie (`JSESSIONID`). The SPA never handles tokens or passwords; the `EventSource` streams are authenticated by the same cookie.
 - **Routing**: browser page loads without a session → `302` to `/oauth2/authorization/keycloak` → Keycloak login page (with "Register"). `/api/**` without a session → `401 {"error":"UNAUTHENTICATED"}`; the SPA then navigates to the login. `/api/health` is public.
 - **CSRF**: cookie `XSRF-TOKEN` (readable by JS), echoed as header `X-XSRF-TOKEN` (Angular does this automatically) or form field `_csrf`. Required on every POST/PATCH/DELETE, including `POST /logout`.
 - **Logout**: `POST /logout` ends the Spring session and the Keycloak session (RP-initiated logout), then returns to the app, which shows the login page again.
-- **Per-user data**: `user_id` in every table = the Keycloak subject (`sub`). `GET /api/me` returns `{id, username, email, name, authEnabled}`. A user's first login creates `users_profile` ($10,000) and the 10 default watchlist tickers. Prices are shared; the market data source tracks the tickers of all users. Kanban notifications are delivered only to their owner's notification stream (`userId` in `KanbanCardRef`, `Notification` and the Camunda process variables).
+- **Per-user data**: `user_id` in every table = the Keycloak subject (`sub`). `GET /api/me` returns `{id, username, email, name, authEnabled}`. A user's first login creates `users_profile` ($10,000) and the 10 default watchlist tickers. Prices are shared; the market data source tracks the tickers of all users. Kanban notifications are delivered only to their owner's notification stream (`userId` in `KanbanCardRef`, `Notification` and the Camunda process variables). The account's email (OIDC `email` claim) is stored in `users_profile.email` for target-hit alert emails (§5).
 - **Backend code** reads the user with `com.finallyapp.security.CurrentUser.id()`; background jobs use `CurrentUser.runAs(userId, ...)`. With auth enabled there is no silent default user.

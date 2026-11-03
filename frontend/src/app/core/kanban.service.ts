@@ -3,7 +3,10 @@ import { Observable, forkJoin, of, tap } from 'rxjs';
 import { ApiClient } from '../api/api-client';
 import { KanbanCard, KanbanCardUpdate, KanbanColumn } from '../api/models';
 
-export type PriceValidation = { ok: true; value: number } | { ok: false; error: string };
+/** Same limit as the backend (kanban_cards.comment). */
+export const MAX_CARD_COMMENT = 500;
+
+export type PriceValidation ={ ok: true; value: number } | { ok: false; error: string };
 
 /** Validate a target price typed by the user: must be a finite number > 0. */
 export function validateTargetPrice(raw: string | number | null | undefined): PriceValidation {
@@ -67,10 +70,22 @@ export class KanbanService {
     });
   }
 
-  create(ticker: string, column: KanbanColumn, targetPrice: number): Observable<KanbanCard> {
+  create(ticker: string, column: KanbanColumn, targetPrice: number, comment?: string | null): Observable<KanbanCard> {
+    const note = (comment ?? '').trim();
     return this.api
-      .createKanbanCard({ ticker: ticker.trim().toUpperCase(), column, targetPrice })
+      .createKanbanCard({ ticker: ticker.trim().toUpperCase(), column, targetPrice, ...(note ? { comment: note } : {}) })
       .pipe(tap((card) => this.upsert(card)));
+  }
+
+  /**
+   * PATCHes the comment (trimmed; empty clears it). Returns an error string when too long and
+   * null when unchanged, instead of a request.
+   */
+  updateComment(card: KanbanCard, raw: string): Observable<KanbanCard> | string | null {
+    const note = (raw ?? '').trim();
+    if (note.length > MAX_CARD_COMMENT) return `The comment can be at most ${MAX_CARD_COMMENT} characters`;
+    if (note === (card.comment ?? '')) return null;
+    return this.update(card.id, { comment: note });
   }
 
   update(id: string, patch: KanbanCardUpdate): Observable<KanbanCard> {

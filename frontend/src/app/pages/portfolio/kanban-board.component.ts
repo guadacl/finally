@@ -44,6 +44,16 @@ import { KanbanCardComponent } from './kanban-card.component';
         [ngModel]="price()"
         (ngModelChange)="price.set($event); error.set(null)"
       />
+      <input
+        name="kComment"
+        data-testid="kanban-add-comment"
+        class="field min-w-32 flex-1"
+        placeholder="Comment (optional)"
+        autocomplete="off"
+        maxlength="500"
+        [ngModel]="comment()"
+        (ngModelChange)="comment.set($event)"
+      />
       <button type="submit" data-testid="kanban-add-button" class="btn btn-submit" [disabled]="busy()">Add card</button>
       @if (livePrice() != null) {
         <span class="num text-xs text-muted">{{ normalized() }} now {{ livePrice()!.toFixed(2) }}</span>
@@ -108,6 +118,7 @@ export class KanbanBoardComponent {
   readonly ticker = signal('');
   readonly column = signal<KanbanColumn>('SUPPORT');
   readonly price = signal('');
+  readonly comment = signal('');
   readonly busy = signal(false);
   readonly error = signal<string | null>(null);
 
@@ -139,11 +150,12 @@ export class KanbanBoardComponent {
       return;
     }
     this.busy.set(true);
-    this.kanban.create(ticker, this.column(), v.value).subscribe({
+    this.kanban.create(ticker, this.column(), v.value, this.comment()).subscribe({
       next: () => {
         this.busy.set(false);
         this.ticker.set('');
         this.price.set('');
+        this.comment.set('');
         this.error.set(null);
       },
       error: (err) => {

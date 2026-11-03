@@ -3,6 +3,7 @@ package com.finallyapp.it;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -14,6 +15,11 @@ import com.finallyapp.contracts.KanbanColumn;
 import com.finallyapp.contracts.KanbanWorkflow;
 import com.finallyapp.contracts.Notification;
 import com.finallyapp.contracts.NotificationType;
+import com.finallyapp.contracts.NotificationEmailer;
+import com.finallyapp.mail.EmailGateway;
+import com.finallyapp.mail.UserEmails;
+import com.finallyapp.workflow.DirectKanbanWorkflow;
+import org.springframework.beans.factory.ObjectProvider;
 import com.finallyapp.market.PriceCache;
 import com.finallyapp.stream.SseNotificationPublisher;
 import java.io.BufferedReader;
@@ -55,7 +61,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
         "finally.market.massive-api-key=",
         "finally.market.finnhub-api-key=",
         "finally.portfolio.snapshot-initial-delay-ms=600000",
-        "finally.stream.heartbeat-ms=600000"
+        "finally.stream.heartbeat-ms=600000",
+        // alert emails on; the MCP email gateway is a mock
+        "finally.mail.enabled=true",
+        "finally.mail.mcp-url=http://127.0.0.1:1/mcp"
 })
 @Testcontainers(disabledWithoutDocker = true)
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
@@ -77,8 +86,15 @@ class AppIntegrationTest {
     @Autowired
     SseNotificationPublisher notifications;
 
+    @Autowired
+    ObjectProvider<NotificationEmailer> emailerProvider;
+    @Autowired
+    UserEmails userEmails;
+
     @MockitoBean
     KanbanWorkflow workflow;
+    @MockitoBean
+    EmailGateway emailGateway;
 
     private final HttpClient http = HttpClient.newHttpClient();
 
@@ -218,11 +234,32 @@ class AppIntegrationTest {
         Res bad = call("PATCH", "/api/kanban/" + id, "{\"targetPrice\":-5}");
         assertThat(bad.status()).isEqualTo(400);
 
+        // Comment: editable, trimmed, cleared with "", kept when absent; never notifies Camunda.
+        clearInvocations(workflow);
+        Res commented = call("PATCH", "/api/kanban/" + id, "{\"comment\":\"  watch earnings \"}");
+        assertThat(commented.status()).isEqualTo(200);
+        assertThat(commented.body().path("comment").asText()).isEqualTo("watch earnings");
+        assertThat(call("PATCH", "/api/kanban/" + id, "{\"targetPrice\":2}").body().path("comment").asText())
+                .isEqualTo("watch earnings");
+        verify(workflow).cardMoved(any()); // the target edit only, not the comment edit
+        assertThat(call("PATCH", "/api/kanban/" + id, "{\"comment\":\"" + "x".repeat(501) + "\"}").status()).isEqualTo(400);
+        assertThat(call("PATCH", "/api/kanban/" + id, "{\"comment\":\"\"}").body().path("comment").isNull()).isTrue();
+        Res withNote = call("POST", "/api/kanban", "{\"ticker\":\"msft\",\"column\":\"SUPPORT\",\"targetPrice\":1,\"comment\":\"from alert\"}");
+        assertThat(withNote.body().path("comment").asText()).isEqualTo("from alert");
+        assertThat(call("DELETE", "/api/kanban/" + withNote.body().path("id").asText(), null).status()).isEqualTo(204);
+        clearInvocations(workflow); // so the checks below only see the lifecycle card's deletion
+
         Res list = call("GET", "/api/kanban", null);
         assertThat(list.body().size()).isEqualTo(1);
 
         assertThat(call("DELETE", "/api/kanban/" + id, null).status()).isEqualTo(204);
-        verify(workflow).cardDeleted(id);
+        // the card's last state (read before the row was removed) and its process instance key
+        org.mockito.ArgumentCaptor<KanbanCardRef> deleted = org.mockito.ArgumentCaptor.forClass(KanbanCardRef.class);
+        verify(workflow).cardDeleted(deleted.capture(), eq(4242L));
+        assertThat(deleted.getValue().id()).isEqualTo(id);
+        assertThat(deleted.getValue().targetPrice()).isEqualByComparingTo("2"); // last edit above
+        assertThat(deleted.getValue().userId()).isEqualTo("default");
+        assertThat(deleted.getValue().ticker()).isNotBlank();
         assertThat(call("DELETE", "/api/kanban/" + id, null).status()).isEqualTo(404);
         assertThat(call("PATCH", "/api/kanban/" + id, "{}").status()).isEqualTo(404);
     }
@@ -329,6 +366,36 @@ class AppIntegrationTest {
         assertThat(call("DELETE", "/api/alerts/" + id, null).status()).isEqualTo(204);
         assertThat(call("DELETE", "/api/alerts/" + id, null).status()).isEqualTo(404);
         assertThat(call("GET", "/api/alerts", null).body()).hasSize(1);
+    }
+
+    @Test
+    @Order(9)
+    void cardEventsAreEmailedToTheStoredAddress() {
+        // V5 migration: users_profile.email; stored the way the login filter does it
+        userEmails.remember("default", "demo@finally.local");
+        assertThat(jdbc.sql("SELECT email FROM users_profile WHERE id = 'default'").query(String.class).single())
+                .isEqualTo("demo@finally.local");
+        assertThat(userEmails.find("nobody")).isEmpty();
+
+        KanbanCardRef card = new KanbanCardRef(UUID.randomUUID(), "AAPL", KanbanColumn.RESISTANCE,
+                new BigDecimal("200"), "default");
+        // the Camunda-down fallback wired with the real app beans (SSE publisher + NotificationMailer):
+        // toast for every type; one email each for created, target hit and deleted - none for moved
+        DirectKanbanWorkflow fallback = new DirectKanbanWorkflow(notifications, emailerProvider);
+        fallback.cardCreated(card);
+        fallback.cardMoved(card);
+        fallback.targetPriceHit(card, new BigDecimal("200.10"));
+        fallback.cardDeleted(card, null);
+
+        org.mockito.ArgumentCaptor<String> subject = org.mockito.ArgumentCaptor.forClass(String.class);
+        org.mockito.ArgumentCaptor<String> body = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(emailGateway, timeout(5000).times(3)).sendEmail(eq("demo@finally.local"), subject.capture(),
+                body.capture());
+        assertThat(subject.getAllValues()).containsExactly(
+                "FinAlly: new Resistance card AAPL @ 200.00",
+                "FinAlly alert: AAPL hit Resistance 200.00",
+                "FinAlly: Resistance card AAPL @ 200.00 deleted");
+        assertThat(body.getAllValues().get(1)).contains("Current price: 200.10").contains("/alerts");
     }
 
     /** Reads SSE lines until {@code wanted} non-empty event lines have been collected (or 10 s pass). */

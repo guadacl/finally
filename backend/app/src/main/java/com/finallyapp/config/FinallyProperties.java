@@ -9,7 +9,30 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
 public record FinallyProperties(
         @DefaultValue Llm llm,
         @DefaultValue Market market,
-        @DefaultValue Auth auth) {
+        @DefaultValue Auth auth,
+        @DefaultValue Mail mail) {
+
+    /**
+     * Target-price-hit alert emails, sent by calling the {@code send_email} tool of the email MCP server
+     * ({@code mcp/email-mcp-server}, which owns the SMTP settings). Emails are only sent when {@code enabled}
+     * and {@code mcpUrl} is non-blank. {@code appUrl} is the browser-facing base URL used for the link in the email.
+     */
+    public record Mail(
+            @DefaultValue("true") boolean enabled,
+            @DefaultValue("") String mcpUrl,
+            @DefaultValue("10s") Duration timeout,
+            @DefaultValue("http://localhost:8000") String appUrl) {
+
+        public boolean active() {
+            return enabled && mcpUrl != null && !mcpUrl.isBlank();
+        }
+
+        /** Link to the Alerts page, e.g. http://localhost:8000/alerts. */
+        public String alertsUrl() {
+            String base = appUrl == null || appUrl.isBlank() ? "http://localhost:8000" : appUrl.trim();
+            return (base.endsWith("/") ? base.substring(0, base.length() - 1) : base) + "/alerts";
+        }
+    }
 
     /**
      * Keycloak login. {@code keycloakUrl} is the URL the <em>browser</em> uses (login page, issuer);

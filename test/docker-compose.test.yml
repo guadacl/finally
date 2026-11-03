@@ -57,6 +57,7 @@ services:
       # E2E specs predate Keycloak login: run them without auth (single "default" user).
       AUTH_ENABLED: "false"
       MASSIVE_API_KEY: ""
+      MAIL_ENABLED: "false"
       OPENROUTER_API_KEY: ""
     depends_on:
       postgres:

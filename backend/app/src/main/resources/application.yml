@@ -24,6 +24,9 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+    # migrations are developed on parallel branches (e.g. V4 and V5 merged in either order); all are additive,
+    # so a lower version that arrives later is applied instead of failing validation
+    out-of-order: true
   jackson:
     time-zone: UTC
     serialization:
@@ -67,6 +70,14 @@ management:
         include: health,info
 
 finally:
+  mail:
+    # Target-price-hit (Support / Resistance) emails to the card owner's Keycloak email address, sent by the
+    # Camunda "email-notify" task through the email MCP server's send_email tool (SMTP is configured there).
+    # Sent only when enabled AND EMAIL_MCP_URL is set (Docker Compose: http://email-mcp:3001/mcp).
+    enabled: ${MAIL_ENABLED:true}
+    mcp-url: ${EMAIL_MCP_URL:}
+    timeout: ${EMAIL_MCP_TIMEOUT:10s}
+    app-url: ${APP_PUBLIC_URL:http://localhost:8000}
   workflow:
     enabled: ${FINALLY_WORKFLOW_ENABLED:true}
   auth:

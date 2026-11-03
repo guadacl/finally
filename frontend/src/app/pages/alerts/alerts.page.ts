@@ -86,8 +86,8 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
                 [ngModel]="lower()" (ngModelChange)="lower.set($event); error.set(null)" />
             </label>
             <label class="flex flex-col gap-1">
-              <span class="text-[10px] tracking-widest text-muted uppercase">Comment</span>
-              <input name="aComment" data-testid="alerts-comment" class="field" autocomplete="off" placeholder="Why this alert?"
+              <span class="text-[10px] tracking-widest text-muted uppercase">Comment (on the cards)</span>
+              <input name="aComment" data-testid="alerts-comment" class="field" autocomplete="off" placeholder="Saved on the Support / Resistance cards"
                 [attr.maxlength]="maxComment" [ngModel]="comment()" (ngModelChange)="comment.set($event); error.set(null)" />
             </label>
             <div class="flex items-end gap-2">
@@ -120,7 +120,6 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
                 <th class="px-3 py-2 text-right">Lower limit</th>
                 <th class="px-3 py-2 text-right">Upper limit</th>
                 <th class="px-3 py-2 text-left">Status</th>
-                <th class="px-3 py-2 text-left">Comment</th>
                 <th class="px-3 py-2 text-left">Added</th>
                 <th class="w-8 px-3 py-2"></th>
               </tr>
@@ -141,7 +140,6 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
                   <td class="px-3 py-2">
                     <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wider uppercase" [class]="statusClass(a)">{{ statusLabel(a) }}</span>
                   </td>
-                  <td class="max-w-80 truncate px-3 py-2 text-muted" [attr.title]="a.comment ?? ''">{{ a.comment || '—' }}</td>
                   <td class="num px-3 py-2 text-muted">{{ a.createdAt | date: 'dd MMM HH:mm' }}</td>
                   <td class="px-3 py-2 text-right">
                     <button type="button" class="text-muted hover:text-down" [attr.data-testid]="'alerts-delete-' + a.id" title="Delete alert" (click)="remove(a)">×</button>
@@ -222,7 +220,7 @@ export class AlertsPage implements OnInit {
       next: () => {
         this.busy.set(false);
         this.closeForm();
-        this.addKanbanCards(body.ticker, body.lowerLimit, body.upperLimit);
+        this.addKanbanCards(body.ticker, body.lowerLimit, body.upperLimit, body.comment);
       },
       error: (e) => {
         this.busy.set(false);
@@ -233,15 +231,16 @@ export class AlertsPage implements OnInit {
 
   /**
    * Mirror a new alert on the kanban board: the lower limit becomes a Support card, the upper
-   * limit a Resistance card (only the limits that were set). The alert is already saved, so a
-   * card failure is reported as a toast instead of blocking the form.
+   * limit a Resistance card (only the limits that were set), both carrying the comment. The alert
+   * is already saved, so a card failure is reported as a toast instead of blocking the form.
    */
-  private addKanbanCards(ticker: string, lower: number | null | undefined, upper: number | null | undefined): void {
+  private addKanbanCards(ticker: string, lower: number | null | undefined, upper: number | null | undefined,
+    comment: string | null | undefined): void {
     const cards: [KanbanColumn, number][] = [];
     if (lower != null) cards.push(['SUPPORT', lower]);
     if (upper != null) cards.push(['RESISTANCE', upper]);
     for (const [column, target] of cards) {
-      this.kanban.create(ticker, column, target).subscribe({
+      this.kanban.create(ticker, column, target, comment).subscribe({
         error: (e) =>
           this.toasts.show({
             type: 'ERROR',

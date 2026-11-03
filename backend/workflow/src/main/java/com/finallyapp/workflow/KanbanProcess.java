@@ -8,6 +8,13 @@ public final class KanbanProcess {
     public static final String JOB_TYPE_NOTIFY = "finally-notify";
     /** Task header on every {@code finally-notify} service task holding the {@code NotificationType} name. */
     public static final String HEADER_NOTIFICATION_TYPE = "notificationType";
+    /**
+     * Service tasks after the CARD_CREATED, CARD_DELETED and TARGET_HIT toasts: email the card owner (via the
+     * email MCP server). The notification type comes from the same {@link #HEADER_NOTIFICATION_TYPE} header.
+     */
+    public static final String JOB_TYPE_EMAIL = "email-notify";
+    /** Element id of the deletion email task; process versions without it predate deletion emails. */
+    public static final String TASK_EMAIL_CARD_DELETED = "Task_EmailCardDeleted";
 
     public static final String MSG_CARD_MOVED = "card-moved";
     public static final String MSG_TARGET_PRICE_HIT = "target-price-hit";

@@ -547,6 +547,7 @@ components:
         sortOrder: { type: integer }
         armed: { type: boolean, description: 'false after an alert fired, until the price crosses back' }
         currentPrice: { type: number, nullable: true }
+        comment: { type: string, nullable: true, description: 'Free-text note, editable on the board' }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
 
@@ -557,6 +558,7 @@ components:
         ticker: { type: string }
         column: { $ref: '#/components/schemas/KanbanColumn' }
         targetPrice: { type: number, exclusiveMinimum: true, minimum: 0 }
+        comment: { type: string, nullable: true, maxLength: 500 }
 
     KanbanCardUpdate:
       type: object
@@ -564,6 +566,7 @@ components:
         column: { $ref: '#/components/schemas/KanbanColumn' }
         targetPrice: { type: number, exclusiveMinimum: true, minimum: 0 }
         sortOrder: { type: integer, minimum: 0 }
+        comment: { type: string, nullable: true, maxLength: 500, description: 'Absent = unchanged; empty string = cleared. Does not re-arm the card.' }
 
     PriceAlert:
       type: object
@@ -593,7 +596,7 @@ components:
 
     NotificationType:
       type: string
-      enum: [CARD_CREATED, CARD_MOVED, TARGET_HIT]
+      enum: [CARD_CREATED, CARD_MOVED, TARGET_HIT, CARD_DELETED]
 
     Notification:
       type: object

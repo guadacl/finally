@@ -16,11 +16,11 @@ import org.springframework.stereotype.Repository;
 public class KanbanRepository {
 
     private static final String COLS =
-            "id, ticker, column_name, target_price, sort_order, armed, process_instance_key, created_at, updated_at, user_id";
+            "id, ticker, column_name, target_price, sort_order, armed, process_instance_key, created_at, updated_at, user_id, comment";
 
     public record CardRow(UUID id, String ticker, KanbanColumn column, BigDecimal targetPrice, int sortOrder,
                           boolean armed, Long processInstanceKey, OffsetDateTime createdAt, OffsetDateTime updatedAt,
-                          String userId) {
+                          String userId, String comment) {
     }
 
     private final JdbcClient jdbc;
@@ -45,14 +45,15 @@ public class KanbanRepository {
                 .param("u", CurrentUser.id()).param("id", id).query(KanbanRepository::map).optional();
     }
 
-    public CardRow insert(String ticker, KanbanColumn column, BigDecimal target) {
+    public CardRow insert(String ticker, KanbanColumn column, BigDecimal target, String comment) {
         return jdbc.sql("""
-                        INSERT INTO kanban_cards (user_id, ticker, column_name, target_price, sort_order, armed)
+                        INSERT INTO kanban_cards (user_id, ticker, column_name, target_price, sort_order, armed, comment)
                         VALUES (:u, :t, :c, :p,
                                 (SELECT COALESCE(MAX(sort_order) + 1, 0) FROM kanban_cards WHERE user_id = :u AND column_name = :c),
-                                TRUE)
+                                TRUE, :m)
                         RETURNING\s""" + COLS)
                 .param("u", CurrentUser.id()).param("t", ticker).param("c", column.name()).param("p", target)
+                .param("m", comment, java.sql.Types.VARCHAR)
                 .query(KanbanRepository::map).single();
     }
 
@@ -61,13 +62,14 @@ public class KanbanRepository {
                 .param("u", CurrentUser.id()).param("c", column.name()).query(Integer.class).single();
     }
 
-    public CardRow update(UUID id, KanbanColumn column, BigDecimal target, int sortOrder, boolean armed) {
+    public CardRow update(UUID id, KanbanColumn column, BigDecimal target, int sortOrder, boolean armed, String comment) {
         return jdbc.sql("""
                         UPDATE kanban_cards
-                        SET column_name = :c, target_price = :p, sort_order = :s, armed = :a, updated_at = now()
+                        SET column_name = :c, target_price = :p, sort_order = :s, armed = :a, comment = :m, updated_at = now()
                         WHERE user_id = :u AND id = :id
                         RETURNING\s""" + COLS)
                 .param("c", column.name()).param("p", target).param("s", sortOrder).param("a", armed)
+                .param("m", comment, java.sql.Types.VARCHAR)
                 .param("u", CurrentUser.id()).param("id", id)
                 .query(KanbanRepository::map).single();
     }
@@ -92,6 +94,7 @@ public class KanbanRepository {
         Long pik = rs.wasNull() ? null : key;
         return new CardRow(rs.getObject(1, UUID.class), rs.getString(2), KanbanColumn.valueOf(rs.getString(3)),
                 rs.getBigDecimal(4), rs.getInt(5), rs.getBoolean(6), pik,
-                rs.getObject(8, OffsetDateTime.class), rs.getObject(9, OffsetDateTime.class), rs.getString(10));
+                rs.getObject(8, OffsetDateTime.class), rs.getObject(9, OffsetDateTime.class), rs.getString(10),
+                rs.getString(11));
     }
 }
