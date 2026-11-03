@@ -18,6 +18,46 @@
   "ssoSessionIdleTimeout": 28800,
   "ssoSessionMaxLifespan": 86400,
   "accessTokenLifespan": 300,
+  "identityProviders": [
+    {
+      "alias": "google",
+      "displayName": "Google",
+      "providerId": "google",
+      "enabled": "${KEYCLOAK_GOOGLE_ENABLED:false}",
+      "trustEmail": true,
+      "storeToken": false,
+      "addReadTokenRoleOnCreate": false,
+      "linkOnly": false,
+      "hideOnLogin": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "${KEYCLOAK_GOOGLE_CLIENT_ID:}",
+        "clientSecret": "${KEYCLOAK_GOOGLE_CLIENT_SECRET:}",
+        "defaultScope": "openid profile email",
+        "syncMode": "IMPORT",
+        "guiOrder": "1"
+      }
+    },
+    {
+      "alias": "facebook",
+      "displayName": "Facebook",
+      "providerId": "facebook",
+      "enabled": "${KEYCLOAK_FACEBOOK_ENABLED:false}",
+      "trustEmail": false,
+      "storeToken": false,
+      "addReadTokenRoleOnCreate": false,
+      "linkOnly": false,
+      "hideOnLogin": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "${KEYCLOAK_FACEBOOK_CLIENT_ID:}",
+        "clientSecret": "${KEYCLOAK_FACEBOOK_CLIENT_SECRET:}",
+        "defaultScope": "email,public_profile",
+        "syncMode": "IMPORT",
+        "guiOrder": "2"
+      }
+    }
+  ],
   "clients": [
     {
       "clientId": "finally-app",

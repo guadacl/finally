@@ -210,6 +210,7 @@ Already written by the orchestrator — read them, don't edit:
 | `KEYCLOAK_INTERNAL_URL` | app | empty → `KEYCLOAK_URL`; in Docker `http://keycloak:8080` |
 | `KEYCLOAK_REALM` / `KEYCLOAK_CLIENT_ID` / `KEYCLOAK_CLIENT_SECRET` | app, keycloak | `finally` / `finally-app` / `finally-dev-secret` |
 | `KEYCLOAK_HOST_PORT` / `KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD` | keycloak | `8180` / `admin` / `admin` |
+| `KEYCLOAK_GOOGLE_CLIENT_ID` / `KEYCLOAK_GOOGLE_CLIENT_SECRET` / `KEYCLOAK_FACEBOOK_CLIENT_ID` / `KEYCLOAK_FACEBOOK_CLIENT_SECRET` | keycloak (realm import), `keycloak/scripts/apply-social-idps.*` | empty → that "Sign in with ..." button is hidden (IdP disabled); see `keycloak/README.md` "Social login" |
 | `LLM_MOCK` | app | `false` |
 | `POSTGRES_DB` / `POSTGRES_USER` / `POSTGRES_PASSWORD` | postgres, app | `finally` / `finally` / `finally` |
 | `SPRING_DATASOURCE_URL` | app | `jdbc:postgresql://postgres:5432/finally` |
@@ -231,7 +232,7 @@ For local dev outside Docker, `localhost` replaces the service names; `docker co
 
 ## 11. Authentication (Keycloak)
 
-- **Keycloak 26** runs as the compose service `keycloak` (`keycloak/compose.keycloak.yml`); realm `finally` is imported from `keycloak/realm/finally-realm.json` on first start. Self-registration, password reset and "remember me" are on. Dev user: `demo` / `demo1234`.
+- **Keycloak 26** runs as the compose service `keycloak` (`keycloak/compose.keycloak.yml`); realm `finally` is imported from `keycloak/realm/finally-realm.json` on first start. Self-registration, password reset and "remember me" are on. Dev user: `demo` / `demo1234`. Optional social login (Identity Brokering): IdPs `google` and `facebook`, enabled only when their client ID/secret are set; a brokered user is a normal Keycloak user (own `sub`, email imported from the provider), and a login whose email matches an existing account links to it after the user re-enters that account's password (default "first broker login" flow).
 - **Backend for frontend**: Spring Security (`spring-boot-starter-oauth2-client`) runs the OIDC authorization-code flow with the confidential client `finally-app` and keeps the login in the server session cookie (`JSESSIONID`). The SPA never handles tokens or passwords; the `EventSource` streams are authenticated by the same cookie.
 - **Routing**: browser page loads without a session → `302` to `/oauth2/authorization/keycloak` → Keycloak login page (with "Register"). `/api/**` without a session → `401 {"error":"UNAUTHENTICATED"}`; the SPA then navigates to the login. `/api/health` is public.
 - **CSRF**: cookie `XSRF-TOKEN` (readable by JS), echoed as header `X-XSRF-TOKEN` (Angular does this automatically) or form field `_csrf`. Required on every POST/PATCH/DELETE, including `POST /logout`.
