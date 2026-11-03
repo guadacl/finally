@@ -45,7 +45,7 @@ public class NotificationMailer implements NotificationEmailer, DisposableBean {
 
     private final FinallyProperties.Mail props;
     private final EmailGateway gateway;
-    private final UserEmails emails;
+    private final UserContacts emails;
     private final Executor executor;
     private final boolean ownsExecutor;
     private final Map<UUID, Boolean> recent = new LinkedHashMap<>(64, 0.75f, false) {
@@ -56,11 +56,11 @@ public class NotificationMailer implements NotificationEmailer, DisposableBean {
     };
 
     @Autowired
-    public NotificationMailer(FinallyProperties props, EmailGateway gateway, UserEmails emails) {
+    public NotificationMailer(FinallyProperties props, EmailGateway gateway, UserContacts emails) {
         this(props.mail(), gateway, emails, newExecutor(), true);
     }
 
-    NotificationMailer(FinallyProperties.Mail props, EmailGateway gateway, UserEmails emails,
+    NotificationMailer(FinallyProperties.Mail props, EmailGateway gateway, UserContacts emails,
                     Executor executor, boolean ownsExecutor) {
         this.props = props;
         this.gateway = gateway;
@@ -116,7 +116,7 @@ public class NotificationMailer implements NotificationEmailer, DisposableBean {
 
     void deliver(Notification n) {
         try {
-            Optional<String> to = emails.find(n.userId());
+            Optional<String> to = emails.email(n.userId());
             if (to.isEmpty()) {
                 log.info("User {} has no email address; skipping {} email for {}", n.userId(), n.type(), n.ticker());
                 return;

@@ -5,6 +5,7 @@ import com.finallyapp.contracts.KanbanColumn;
 import com.finallyapp.contracts.Notification;
 import com.finallyapp.contracts.NotificationEmailer;
 import com.finallyapp.contracts.NotificationPublisher;
+import com.finallyapp.contracts.NotificationSms;
 import com.finallyapp.contracts.NotificationType;
 import io.camunda.client.CamundaClient;
 import io.camunda.client.api.CamundaFuture;
@@ -39,6 +40,8 @@ class KanbanWorkflowFallbackTest {
     private final List<Notification> emailed = new CopyOnWriteArrayList<>();
     private final NotificationPublisher publisher = published::add;
     private final NotificationEmailer emailer = emailed::add;
+    private final List<Notification> texted = new CopyOnWriteArrayList<>();
+    private final NotificationSms sms = texted::add;
     private final KanbanCardRef card =
             new KanbanCardRef(UUID.randomUUID(), "AAPL", KanbanColumn.SUPPORT, new BigDecimal("185"), "user-1");
 
@@ -53,10 +56,10 @@ class KanbanWorkflowFallbackTest {
         return new CamundaKanbanWorkflow(provider(client), publisher);
     }
 
-    /** With an emailer; background work runs inline. */
+    /** With an emailer and an SMS sender; background work runs inline. */
     private CamundaKanbanWorkflow emailingWorkflow(CamundaClient client) {
-        return new CamundaKanbanWorkflow(provider(client), new DirectKanbanWorkflow(publisher, provider(emailer)),
-                Runnable::run);
+        return new CamundaKanbanWorkflow(provider(client),
+                new DirectKanbanWorkflow(publisher, provider(emailer), provider(sms)), Runnable::run);
     }
 
     private static CamundaClient unreachable() {
@@ -141,8 +144,21 @@ class KanbanWorkflowFallbackTest {
 
         assertThat(emailed).extracting(Notification::type).containsExactly(
                 NotificationType.CARD_CREATED, NotificationType.TARGET_HIT, NotificationType.CARD_DELETED);
-        // each email is the same notification as its toast
+        // each email and SMS is the same notification as its toast
         assertThat(published).filteredOn(n -> n.type() != NotificationType.CARD_MOVED).containsExactlyElementsOf(emailed);
+        assertThat(texted).containsExactlyElementsOf(emailed);
+    }
+
+    @Test
+    void smsFailureDoesNotStopEmailOrToast() {
+        NotificationSms broken = mock(NotificationSms.class);
+        doThrow(new IllegalStateException("mcp down")).when(broken).send(any());
+        DirectKanbanWorkflow direct = new DirectKanbanWorkflow(publisher, provider(emailer), provider(broken));
+
+        assertThatNoException().isThrownBy(() -> direct.cardCreated(card));
+        verify(broken).send(any());
+        assertThat(published).hasSize(1);
+        assertThat(emailed).hasSize(1);
     }
 
     @Test
@@ -174,6 +190,7 @@ class KanbanWorkflowFallbackTest {
 
         assertThat(published).extracting(Notification::type).containsExactly(NotificationType.CARD_DELETED);
         assertThat(emailed).extracting(Notification::type).containsExactly(NotificationType.CARD_DELETED);
+        assertThat(texted).extracting(Notification::type).containsExactly(NotificationType.CARD_DELETED);
         verify(client).newCancelInstanceCommand(4711L);
     }
 
@@ -211,12 +228,33 @@ class KanbanWorkflowFallbackTest {
 
         assertThat(emailed).extracting(Notification::type)
                 .containsExactly(NotificationType.CARD_DELETED, NotificationType.CARD_DELETED);
+        assertThat(texted).hasSize(2);
+        assertThat(published).hasSize(2);
         verify(client, org.mockito.Mockito.times(1)).newProcessDefinitionGetXmlRequest(7L);
     }
 
     @Test
-    void deleteOfTheCurrentProcessVersionLeavesTheEmailToCamunda() {
+    void deleteOfAnEmailOnlyProcessVersionSendsJustTheSms() {
         CamundaClient client = clientWithDefinition("<bpmn id=\"" + KanbanProcess.TASK_EMAIL_CARD_DELETED + "\"/>");
+        CamundaKanbanWorkflow workflow = emailingWorkflow(client);
+        CorrelateMessageResponse response = mock(CorrelateMessageResponse.class);
+        when(response.getProcessInstanceKey()).thenReturn(99L);
+
+        workflow.notifyIfLegacyVersion(card, response);
+
+        // the old version already toasted and emailed
+        assertThat(published).isEmpty();
+        assertThat(emailed).isEmpty();
+        assertThat(texted).singleElement().satisfies(n -> {
+            assertThat(n.type()).isEqualTo(NotificationType.CARD_DELETED);
+            assertThat(n.userId()).isEqualTo("user-1");
+        });
+    }
+
+    @Test
+    void deleteOfTheCurrentProcessVersionLeavesEverythingToCamunda() {
+        CamundaClient client = clientWithDefinition("<bpmn id=\"" + KanbanProcess.TASK_EMAIL_CARD_DELETED + "\" x=\""
+                + KanbanProcess.TASK_SMS_CARD_DELETED + "\"/>");
         CamundaKanbanWorkflow workflow = emailingWorkflow(client);
         CorrelateMessageResponse response = mock(CorrelateMessageResponse.class);
         when(response.getProcessInstanceKey()).thenReturn(99L);
@@ -225,6 +263,7 @@ class KanbanWorkflowFallbackTest {
 
         assertThat(published).isEmpty();
         assertThat(emailed).isEmpty();
+        assertThat(texted).isEmpty();
     }
 
     @Test

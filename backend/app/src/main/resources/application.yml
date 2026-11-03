@@ -78,6 +78,11 @@ finally:
     mcp-url: ${EMAIL_MCP_URL:}
     timeout: ${EMAIL_MCP_TIMEOUT:10s}
     app-url: ${APP_PUBLIC_URL:http://localhost:8000}
+  sms:
+    # SMS (card created / deleted / target hit) to the card owner's Keycloak phone_number, sent by the Camunda
+    # "sms-notify" task (parallel with the email) through the same MCP server's send_sms tool. The provider is set
+    # on the MCP server (SMS_PROVIDER, default "log" = written to its log, no real SMS).
+    enabled: ${SMS_ENABLED:true}
   workflow:
     enabled: ${FINALLY_WORKFLOW_ENABLED:true}
   auth:

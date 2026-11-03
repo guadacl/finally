@@ -4,6 +4,7 @@ import com.finallyapp.contracts.KanbanCardRef;
 import com.finallyapp.contracts.KanbanWorkflow;
 import com.finallyapp.contracts.NotificationEmailer;
 import com.finallyapp.contracts.NotificationPublisher;
+import com.finallyapp.contracts.NotificationSms;
 import io.camunda.client.CamundaClient;
 import io.camunda.client.api.CamundaFuture;
 import io.camunda.client.api.response.CorrelateMessageResponse;
@@ -41,7 +42,8 @@ import java.util.function.Consumer;
  *
  * <p>Process instances started before the deletion email existed run an older process version that ends
  * without emailing; after a successful {@code card-deleted} correlation the instance's process definition is
- * checked (cached per definition) and, for such old versions, the deletion toast + email are sent directly.
+ * checked (cached per definition) and, for such old versions, the missing deletion toast / email / SMS are sent
+ * directly.
  */
 @Component
 @ConditionalOnProperty(name = "finally.workflow.enabled", havingValue = "true", matchIfMissing = true)
@@ -54,19 +56,22 @@ public class CamundaKanbanWorkflow implements KanbanWorkflow {
 
     private final ObjectProvider<CamundaClient> clientProvider;
     private final DirectKanbanWorkflow fallback;
-    /** process definition key -> its BPMN emails on card deletion. */
-    private final Map<Long, Boolean> emailsOnDelete = new ConcurrentHashMap<>();
+    /** process definition key -> what its BPMN does on card deletion. */
+    private final Map<Long, DeleteSupport> deleteSupport = new ConcurrentHashMap<>();
     private final Executor background;
 
     public CamundaKanbanWorkflow(ObjectProvider<CamundaClient> clientProvider, NotificationPublisher publisher) {
         this(clientProvider, new DirectKanbanWorkflow(publisher), defaultExecutor());
     }
 
-    /** The fallback also emails (the email-notify tasks do not run when Camunda could not be reached). */
+    /**
+     * The fallback also emails and texts (the email-notify / sms-notify tasks do not run when Camunda could not be
+     * reached).
+     */
     @Autowired
     public CamundaKanbanWorkflow(ObjectProvider<CamundaClient> clientProvider, NotificationPublisher publisher,
-                                 ObjectProvider<NotificationEmailer> emailer) {
-        this(clientProvider, new DirectKanbanWorkflow(publisher, emailer), defaultExecutor());
+                                 ObjectProvider<NotificationEmailer> emailer, ObjectProvider<NotificationSms> sms) {
+        this(clientProvider, new DirectKanbanWorkflow(publisher, emailer, sms), defaultExecutor());
     }
 
     CamundaKanbanWorkflow(ObjectProvider<CamundaClient> clientProvider, DirectKanbanWorkflow fallback,
@@ -149,7 +154,19 @@ public class CamundaKanbanWorkflow implements KanbanWorkflow {
                 });
     }
 
-    /** For instances of a process version without the deletion email task: send toast + email directly. */
+    /** What a process version does on card deletion. */
+    record DeleteSupport(boolean emails, boolean texts) {
+        static DeleteSupport of(String bpmnXml) {
+            return new DeleteSupport(bpmnXml.contains(KanbanProcess.TASK_EMAIL_CARD_DELETED),
+                    bpmnXml.contains(KanbanProcess.TASK_SMS_CARD_DELETED));
+        }
+    }
+
+    /**
+     * Completes the deletion notifications for instances of older process versions: a version without the
+     * deletion email task gets toast + email + SMS sent directly; a version with the email but without the SMS
+     * task (email-only era) gets just the SMS.
+     */
     void notifyIfLegacyVersion(KanbanCardRef card, CorrelateMessageResponse response) {
         try {
             Long instanceKey = response == null ? null : response.getProcessInstanceKey();
@@ -162,17 +179,19 @@ public class CamundaKanbanWorkflow implements KanbanWorkflow {
             if (definitionKey == null) {
                 return;
             }
-            boolean emails = emailsOnDelete.computeIfAbsent(definitionKey, k -> client
+            DeleteSupport support = deleteSupport.computeIfAbsent(definitionKey, k -> DeleteSupport.of(client
                     .newProcessDefinitionGetXmlRequest(k).send()
-                    .join(LOOKUP_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)
-                    .contains(KanbanProcess.TASK_EMAIL_CARD_DELETED));
-            if (!emails) {
-                log.info("Card {} ran an older kanban-card version without the deletion email; notifying directly",
+                    .join(LOOKUP_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)));
+            if (!support.emails()) {
+                log.info("Card {} ran a kanban-card version without deletion email/SMS; notifying directly",
                         card.id());
                 fallback.cardDeleted(card, instanceKey);
+            } else if (!support.texts()) {
+                log.info("Card {} ran a kanban-card version without the deletion SMS; sending it directly", card.id());
+                fallback.cardDeletedSmsOnly(card);
             }
         } catch (Exception e) {
-            // unknown: assume the current version (which emails) rather than risk a duplicate email
+            // unknown: assume the current version (which emails and texts) rather than risk duplicates
             log.debug("Could not check the process version of card {}: {}", card.id(), e.toString());
         }
     }

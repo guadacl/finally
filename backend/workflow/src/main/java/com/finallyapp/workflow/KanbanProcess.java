@@ -15,6 +15,13 @@ public final class KanbanProcess {
     public static final String JOB_TYPE_EMAIL = "email-notify";
     /** Element id of the deletion email task; process versions without it predate deletion emails. */
     public static final String TASK_EMAIL_CARD_DELETED = "Task_EmailCardDeleted";
+    /**
+     * Service tasks running in parallel with each {@link #JOB_TYPE_EMAIL} task (parallel gateway split/join):
+     * SMS to the card owner (via the notification MCP server). Same {@link #HEADER_NOTIFICATION_TYPE} header.
+     */
+    public static final String JOB_TYPE_SMS = "sms-notify";
+    /** Element id of the deletion SMS task; process versions without it predate SMS. */
+    public static final String TASK_SMS_CARD_DELETED = "Task_SmsCardDeleted";
 
     public static final String MSG_CARD_MOVED = "card-moved";
     public static final String MSG_TARGET_PRICE_HIT = "target-price-hit";

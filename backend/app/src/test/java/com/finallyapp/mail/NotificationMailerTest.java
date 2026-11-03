@@ -37,14 +37,14 @@ class NotificationMailerTest {
     private static final Executor DIRECT = Runnable::run;
 
     private EmailGateway gateway;
-    private UserEmails emails;
+    private UserContacts emails;
 
     @BeforeEach
     void setUp() {
         gateway = mock(EmailGateway.class);
         when(gateway.sendEmail(anyString(), anyString(), anyString())).thenReturn("<id@finally>");
-        emails = mock(UserEmails.class);
-        when(emails.find("user-1")).thenReturn(Optional.of("demo@finally.local"));
+        emails = mock(UserContacts.class);
+        when(emails.email("user-1")).thenReturn(Optional.of("demo@finally.local"));
     }
 
     private NotificationMailer mailer(FinallyProperties.Mail props, Executor executor) {
@@ -91,7 +91,7 @@ class NotificationMailerTest {
 
     @Test
     void userWithoutEmailIsSkipped() {
-        when(emails.find("no-mail")).thenReturn(Optional.empty());
+        when(emails.email("no-mail")).thenReturn(Optional.empty());
         mailer(ON, DIRECT).send(hit("no-mail", KanbanColumn.RESISTANCE));
         verify(gateway, never()).sendEmail(anyString(), anyString(), anyString());
     }
@@ -121,7 +121,7 @@ class NotificationMailerTest {
 
     @Test
     void lookupFailureIsSwallowed() {
-        when(emails.find(anyString())).thenThrow(new IllegalStateException("db down"));
+        when(emails.email(anyString())).thenThrow(new IllegalStateException("db down"));
         assertThatCode(() -> mailer(ON, DIRECT).send(hit("user-1", KanbanColumn.SUPPORT))).doesNotThrowAnyException();
         verify(gateway, never()).sendEmail(anyString(), anyString(), anyString());
     }
@@ -152,7 +152,7 @@ class NotificationMailerTest {
             release.await(5, TimeUnit.SECONDS);
             return "<id>";
         }).when(gateway).sendEmail(anyString(), anyString(), anyString());
-        NotificationMailer m = new NotificationMailer(new FinallyProperties(null, null, null, ON), gateway, emails);
+        NotificationMailer m = new NotificationMailer(new FinallyProperties(null, null, null, ON, null), gateway, emails);
         try {
             long start = System.nanoTime();
             m.send(hit("user-1", KanbanColumn.SUPPORT));
