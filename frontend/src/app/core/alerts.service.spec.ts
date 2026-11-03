@@ -3,7 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { PriceAlert } from '../api/models';
 import { fmtVolume } from '../shared/format';
-import { AlertsService, alertStatus, buildAlert, liveDayRange } from './alerts.service';
+import { AlertsService, alertMargin, alertStatus, buildAlert, liveDayRange } from './alerts.service';
 
 const alert = (id: string, ticker = 'AAPL'): PriceAlert => ({ id, ticker, upperLimit: 200, lowerLimit: 150, createdAt: '2026-11-03T10:00:00Z' });
 
@@ -35,6 +35,21 @@ describe('alertStatus', () => {
     expect(alertStatus(150, 100, 200)).toBe('inside');
     expect(alertStatus(150, null, 200)).toBe('inside');
     expect(alertStatus(50, 100, null)).toBe('below');
+  });
+});
+
+describe('alertMargin', () => {
+  it('is the room left before the level, in % of the price (negative once broken)', () => {
+    expect(alertMargin(200, 180, 'support')).toBeCloseTo(10);
+    expect(alertMargin(200, 220, 'resistance')).toBeCloseTo(10);
+    expect(alertMargin(200, 210, 'support')).toBeCloseTo(-5);
+    expect(alertMargin(200, 190, 'resistance')).toBeCloseTo(-5);
+    expect(alertMargin(200, 200, 'support')).toBe(0);
+  });
+
+  it('is null without a price or a level', () => {
+    expect(alertMargin(null, 100, 'support')).toBeNull();
+    expect(alertMargin(100, null, 'resistance')).toBeNull();
   });
 });
 

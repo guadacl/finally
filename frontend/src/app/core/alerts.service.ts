@@ -15,6 +15,20 @@ export function alertStatus(price: number | null | undefined, lower?: number | n
   return 'inside';
 }
 
+/** Which limit an alerts table is about: support = lower limit, resistance = upper limit. */
+export type AlertSide = 'support' | 'resistance';
+
+/**
+ * Margin between the live price and a support/resistance level, in % of the price.
+ * Positive = room left before the level is hit; zero or negative = the level is reached or broken.
+ * Support 200, price 210 → +4.76%; resistance 220, price 210 → +4.76%.
+ */
+export function alertMargin(price: number | null | undefined, level: number | null | undefined, side: AlertSide): number | null {
+  if (price == null || level == null || !Number.isFinite(price) || !Number.isFinite(level) || price <= 0) return null;
+  const diff = side === 'support' ? price - level : level - price;
+  return (diff / price) * 100;
+}
+
 /**
  * Day range shown for an alert: the server's day high/low (from the market data source), widened by the live
  * price so a new high/low appears immediately instead of at the next refresh.

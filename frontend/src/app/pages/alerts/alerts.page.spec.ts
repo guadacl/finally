@@ -67,10 +67,48 @@ describe('AlertsPage', () => {
     await fixture.whenStable();
 
     expect(q(root, 'alerts-form')).toBeNull();
-    const row = q(root, 'alerts-row-x1')!;
-    expect(row.textContent).toContain('MSFT');
-    expect(row.textContent).toContain('earnings week');
-    expect(row.getAttribute('data-status')).toBe('inside');
+    // both limits → the alert shows in the support and in the resistance table
+    for (const side of ['support', 'resistance']) {
+      const row = q(root, `alerts-${side}-row-x1`)!;
+      expect(row.textContent).toContain('MSFT');
+      expect(row.textContent).toContain('earnings week');
+      expect(row.getAttribute('data-status')).toBe('inside');
+    }
+    expect(q(root, 'alerts-support-margin-x1')!.textContent).toContain('+10.00%'); // (500 − 450) / 500
+    expect(q(root, 'alerts-resistance-margin-x1')!.textContent).toContain('+20.00%'); // (600 − 500) / 500
+  });
+
+  it('splits alerts into a support and a resistance table, each showing only its own level', async () => {
+    const fixture = TestBed.createComponent(AlertsPage);
+    fixture.detectChanges();
+    http.expectOne('/api/alerts').flush([
+      { id: 's1', ticker: 'AAPL', lowerLimit: 220, createdAt: '2026-11-03T10:00:00Z' },
+      { id: 'r1', ticker: 'MSFT', upperLimit: 480, createdAt: '2026-11-03T10:00:00Z' },
+    ]);
+    const prices = TestBed.inject(PriceStreamService);
+    prices.apply({ ticker: 'AAPL', price: 200, previousPrice: 201, timestamp: '2026-11-03T15:00:00Z', direction: 'down' });
+    prices.apply({ ticker: 'MSFT', price: 400, previousPrice: 399, timestamp: '2026-11-03T15:00:00Z', direction: 'up' });
+    await fixture.whenStable();
+    const root: HTMLElement = fixture.nativeElement;
+
+    const support = q(root, 'alerts-table-support')!;
+    const resistance = q(root, 'alerts-table-resistance')!;
+    expect(q(support, 'alerts-support-row-s1')).not.toBeNull();
+    expect(q(support, 'alerts-support-row-r1')).toBeNull();
+    expect(q(resistance, 'alerts-resistance-row-r1')).not.toBeNull();
+    expect(q(resistance, 'alerts-resistance-row-s1')).toBeNull();
+
+    const headers = (t: HTMLElement) => Array.from(t.querySelectorAll('th')).map((th) => th.textContent!.trim());
+    expect(headers(support)).toContain('Support');
+    expect(headers(support)).not.toContain('Resistance');
+    expect(headers(resistance)).toContain('Resistance');
+    expect(headers(resistance)).not.toContain('Support');
+    expect(headers(support)).toContain('Margin');
+
+    // AAPL 200 is below the 220 support → broken, negative margin
+    expect(q(root, 'alerts-support-row-s1')!.getAttribute('data-status')).toBe('below');
+    expect(q(root, 'alerts-support-margin-s1')!.textContent).toContain('-10.00%');
+    expect(q(root, 'alerts-resistance-margin-r1')!.textContent).toContain('+20.00%');
   });
 
   it('shows validation errors without calling the API', async () => {
@@ -95,10 +133,10 @@ describe('AlertsPage', () => {
     TestBed.inject(PriceStreamService).apply({ ticker: 'AAPL', price: 345.1, previousPrice: 344, timestamp: '2026-11-03T15:00:00Z', direction: 'up' });
     await fixture.whenStable();
     const root: HTMLElement = fixture.nativeElement;
-    expect(q(root, 'alerts-daylow-v1')!.textContent).toContain('335.82');
-    expect(q(root, 'alerts-dayhigh-v1')!.textContent).toContain('345.10');
-    expect(q(root, 'alerts-volume-v1')!.textContent).toContain('64.76M');
-    expect(q(root, 'alerts-volume-v1')!.getAttribute('title')).toContain('2 Nov');
+    expect(q(root, 'alerts-resistance-daylow-v1')!.textContent).toContain('335.82');
+    expect(q(root, 'alerts-resistance-dayhigh-v1')!.textContent).toContain('345.10');
+    expect(q(root, 'alerts-resistance-volume-v1')!.textContent).toContain('64.76M');
+    expect(q(root, 'alerts-resistance-volume-v1')!.getAttribute('title')).toContain('2 Nov');
   });
 
   it('deletes an alert', async () => {
@@ -107,9 +145,9 @@ describe('AlertsPage', () => {
     http.expectOne('/api/alerts').flush([{ id: 'd1', ticker: 'AAPL', lowerLimit: 100, createdAt: '2026-11-03T10:00:00Z' }]);
     await fixture.whenStable();
     const root: HTMLElement = fixture.nativeElement;
-    q(root, 'alerts-delete-d1')!.click();
+    q(root, 'alerts-support-delete-d1')!.click();
     http.expectOne({ method: 'DELETE', url: '/api/alerts/d1' }).flush(null, { status: 204, statusText: 'No Content' });
     await fixture.whenStable();
-    expect(q(root, 'alerts-row-d1')).toBeNull();
+    expect(q(root, 'alerts-support-row-d1')).toBeNull();
   });
 });

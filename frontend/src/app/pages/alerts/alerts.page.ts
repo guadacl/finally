@@ -1,28 +1,30 @@
-import { DatePipe } from '@angular/common';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { PriceAlert, errorMessage } from '../../api/models';
-import { AlertStatus, AlertsService, MAX_ALERT_COMMENT, alertStatus, buildAlert, liveDayRange } from '../../core/alerts.service';
+import {
+  AlertSide, AlertStatus, AlertsService, MAX_ALERT_COMMENT, alertMargin, alertStatus, buildAlert, liveDayRange,
+} from '../../core/alerts.service';
 import { PriceStreamService } from '../../core/price-stream.service';
 import { WatchlistService } from '../../core/watchlist.service';
-import { PricePipe, VolumePipe } from '../../shared/format';
+import { PctPipe, PricePipe, VolumePipe } from '../../shared/format';
 import { PriceFlashDirective } from '../../shared/price-flash.directive';
 
 /** How often the list is reloaded for fresh day high/low and volume. */
 export const REFRESH_MS = 30_000;
 
 const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
-  above: { label: 'Above upper', cls: 'bg-up/15 text-up' },
-  below: { label: 'Below lower', cls: 'bg-down/15 text-down' },
-  inside: { label: 'In range', cls: 'bg-edge text-muted' },
+  above: { label: 'Above resistance', cls: 'bg-up/15 text-up' },
+  below: { label: 'Below support', cls: 'bg-down/15 text-down' },
+  inside: { label: 'Not reached', cls: 'bg-edge text-muted' },
   unknown: { label: 'No price', cls: 'bg-edge text-muted' },
 };
 
 @Component({
   selector: 'app-alerts-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, DatePipe, PricePipe, VolumePipe, PriceFlashDirective],
+  imports: [FormsModule, RouterLink, DatePipe, NgTemplateOutlet, PctPipe, PricePipe, VolumePipe, PriceFlashDirective],
   host: { class: 'block h-full' },
   template: `
     <section class="panel mx-auto flex h-full max-w-6xl flex-col overflow-hidden">
@@ -96,16 +98,34 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
             <span>Click <span class="font-bold text-fg">+</span> to watch a stock from your watchlist between a lower and an upper limit.</span>
           </div>
         } @else {
+          <ng-container *ngTemplateOutlet="sideTable; context: { $implicit: 'support', rows: supportAlerts() }" />
+          <ng-container *ngTemplateOutlet="sideTable; context: { $implicit: 'resistance', rows: resistanceAlerts() }" />
+        }
+      </div>
+    </section>
+
+    <ng-template #sideTable let-side let-rows="rows">
+      <div class="border-b border-edge" [attr.data-testid]="'alerts-table-' + side">
+        <div class="flex items-center justify-between bg-panel-2 px-3 py-1.5 text-[10px] font-semibold tracking-widest uppercase"
+          [class.text-down]="side === 'support'" [class.text-up]="side === 'resistance'">
+          <span>{{ side === 'support' ? 'Support (lower limit)' : 'Resistance (upper limit)' }}</span>
+          <span class="num font-normal text-muted">{{ rows.length }}</span>
+        </div>
+        @if (rows.length === 0) {
+          <p class="px-3 py-3 text-xs text-muted" [attr.data-testid]="'alerts-empty-' + side">
+            No alerts with {{ side === 'support' ? 'a lower' : 'an upper' }} limit.
+          </p>
+        } @else {
           <table class="w-full text-xs">
-            <thead class="sticky top-0 bg-panel text-[10px] tracking-widest text-muted uppercase">
+            <thead class="bg-panel text-[10px] tracking-widest text-muted uppercase">
               <tr class="border-b border-edge">
                 <th class="px-3 py-2 text-left">Ticker</th>
                 <th class="px-3 py-2 text-right">Price</th>
                 <th class="px-3 py-2 text-right" title="Lowest price of the current trading day">Day low</th>
                 <th class="px-3 py-2 text-right" title="Highest price of the current trading day">Day high</th>
                 <th class="px-3 py-2 text-right" title="Shares traded in the last completed trading session">Vol (last session)</th>
-                <th class="px-3 py-2 text-right">Lower limit</th>
-                <th class="px-3 py-2 text-right">Upper limit</th>
+                <th class="px-3 py-2 text-right">{{ side === 'support' ? 'Support' : 'Resistance' }}</th>
+                <th class="px-3 py-2 text-right" [attr.title]="marginHelp(side)">Margin</th>
                 <th class="px-3 py-2 text-left">Status</th>
                 <th class="px-3 py-2 text-left">Comment</th>
                 <th class="px-3 py-2 text-left">Added</th>
@@ -113,23 +133,23 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
               </tr>
             </thead>
             <tbody>
-              @for (a of alerts.alerts(); track a.id) {
-                <tr class="border-b border-edge/60 hover:bg-panel-2" [attr.data-testid]="'alerts-row-' + a.id" [attr.data-status]="status(a)">
+              @for (a of rows; track a.id) {
+                <tr class="border-b border-edge/60 hover:bg-panel-2" [attr.data-testid]="'alerts-' + side + '-row-' + a.id" [attr.data-status]="status(a, side)">
                   <td class="px-3 py-2 font-bold">{{ a.ticker }}</td>
                   <td class="num px-3 py-2 text-right"><span class="rounded px-1" [appPriceFlash]="livePrice(a)">{{ livePrice(a) | price }}</span></td>
-                  <td class="num px-3 py-2 text-right text-muted" [attr.data-testid]="'alerts-daylow-' + a.id">{{ dayRange(a).low | price }}</td>
-                  <td class="num px-3 py-2 text-right text-muted" [attr.data-testid]="'alerts-dayhigh-' + a.id">{{ dayRange(a).high | price }}</td>
-                  <td class="num px-3 py-2 text-right text-muted" [attr.data-testid]="'alerts-volume-' + a.id"
+                  <td class="num px-3 py-2 text-right text-muted" [attr.data-testid]="'alerts-' + side + '-daylow-' + a.id">{{ dayRange(a).low | price }}</td>
+                  <td class="num px-3 py-2 text-right text-muted" [attr.data-testid]="'alerts-' + side + '-dayhigh-' + a.id">{{ dayRange(a).high | price }}</td>
+                  <td class="num px-3 py-2 text-right text-muted" [attr.data-testid]="'alerts-' + side + '-volume-' + a.id"
                     [attr.title]="a.lastSessionDate ? 'Session of ' + (a.lastSessionDate | date: 'EEE d MMM') : 'Volume needs a Massive API key'">{{ a.lastSessionVolume | volume }}</td>
-                  <td class="num px-3 py-2 text-right text-down">{{ a.lowerLimit != null ? (a.lowerLimit | price) : '—' }}</td>
-                  <td class="num px-3 py-2 text-right text-up">{{ a.upperLimit != null ? (a.upperLimit | price) : '—' }}</td>
+                  <td class="num px-3 py-2 text-right" [class.text-down]="side === 'support'" [class.text-up]="side === 'resistance'">{{ level(a, side) | price }}</td>
+                  <td class="num px-3 py-2 text-right" [class]="marginClass(a, side)" [attr.data-testid]="'alerts-' + side + '-margin-' + a.id">{{ margin(a, side) | pct }}</td>
                   <td class="px-3 py-2">
-                    <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wider uppercase" [class]="statusClass(a)">{{ statusLabel(a) }}</span>
+                    <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wider uppercase" [class]="statusClass(a, side)">{{ statusLabel(a, side) }}</span>
                   </td>
                   <td class="max-w-80 truncate px-3 py-2 text-muted" [attr.title]="a.comment ?? ''">{{ a.comment || '—' }}</td>
                   <td class="num px-3 py-2 text-muted">{{ a.createdAt | date: 'dd MMM HH:mm' }}</td>
                   <td class="px-3 py-2 text-right">
-                    <button type="button" class="text-muted hover:text-down" [attr.data-testid]="'alerts-delete-' + a.id" title="Delete alert" (click)="remove(a)">×</button>
+                    <button type="button" class="text-muted hover:text-down" [attr.data-testid]="'alerts-' + side + '-delete-' + a.id" title="Delete alert" (click)="remove(a)">×</button>
                   </td>
                 </tr>
               }
@@ -137,7 +157,7 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
           </table>
         }
       </div>
-    </section>
+    </ng-template>
   `,
 })
 export class AlertsPage implements OnInit {
@@ -157,6 +177,9 @@ export class AlertsPage implements OnInit {
 
   readonly watchlistTickers = computed(() => this.watchlist.items().map((i) => i.ticker));
   readonly selectedPrice = computed(() => (this.ticker() ? this.prices.price(this.ticker()) : null));
+  /** Alerts with a lower limit; one with both limits appears in both tables. */
+  readonly supportAlerts = computed(() => this.alerts.alerts().filter((a) => a.lowerLimit != null));
+  readonly resistanceAlerts = computed(() => this.alerts.alerts().filter((a) => a.upperLimit != null));
 
   ngOnInit(): void {
     this.alerts.load();
@@ -216,15 +239,39 @@ export class AlertsPage implements OnInit {
     return liveDayRange(a.dayHigh, a.dayLow, this.livePrice(a));
   }
 
-  status(a: PriceAlert): AlertStatus {
-    return alertStatus(this.livePrice(a), a.lowerLimit, a.upperLimit);
+  level(a: PriceAlert, side: AlertSide): number | null {
+    return (side === 'support' ? a.lowerLimit : a.upperLimit) ?? null;
   }
 
-  statusLabel(a: PriceAlert): string {
-    return STATUS[this.status(a)].label;
+  margin(a: PriceAlert, side: AlertSide): number | null {
+    return alertMargin(this.livePrice(a), this.level(a, side), side);
   }
 
-  statusClass(a: PriceAlert): string {
-    return STATUS[this.status(a)].cls;
+  /** Accent yellow once the level is reached or broken. */
+  marginClass(a: PriceAlert, side: AlertSide): string {
+    const m = this.margin(a, side);
+    if (m == null) return 'text-muted';
+    return m <= 0 ? 'font-semibold text-accent' : 'text-fg';
+  }
+
+  marginHelp(side: AlertSide): string {
+    return side === 'support'
+      ? 'How far the price can fall before reaching the support, in % of the price (negative = broken)'
+      : 'How far the price can rise before reaching the resistance, in % of the price (negative = broken)';
+  }
+
+  /** Status against this table's level only; the other limit is ignored. */
+  status(a: PriceAlert, side: AlertSide): AlertStatus {
+    return side === 'support'
+      ? alertStatus(this.livePrice(a), a.lowerLimit, null)
+      : alertStatus(this.livePrice(a), null, a.upperLimit);
+  }
+
+  statusLabel(a: PriceAlert, side: AlertSide): string {
+    return STATUS[this.status(a, side)].label;
+  }
+
+  statusClass(a: PriceAlert, side: AlertSide): string {
+    return STATUS[this.status(a, side)].cls;
   }
 }
