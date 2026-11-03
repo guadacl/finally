@@ -27,6 +27,22 @@ export function targetHint(column: KanbanColumn, target: number, price: number |
   return null;
 }
 
+/** DIST shown on a card: % from the current price to the target (negative = target below price). */
+export function cardDistance(target: number, price: number | null | undefined): number | null {
+  return price ? ((target - price) / price) * 100 : null;
+}
+
+/**
+ * Column display order: DIST ascending (signed, as shown on the cards). Cards without a price go
+ * last; ties keep the saved order.
+ */
+export function sortByDistance(cards: readonly KanbanCard[], priceOf: (card: KanbanCard) => number | null | undefined): KanbanCard[] {
+  return cards
+    .map((card, i) => ({ card, i, d: cardDistance(card.targetPrice, priceOf(card)) }))
+    .sort((a, b) => (a.d == null ? 1 : 0) - (b.d == null ? 1 : 0) || (a.d ?? 0) - (b.d ?? 0) || a.i - b.i)
+    .map((x) => x.card);
+}
+
 function sortCards(cards: KanbanCard[]): KanbanCard[] {
   return [...cards].sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt));
 }
