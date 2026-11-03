@@ -10,7 +10,16 @@ public record FinallyProperties(
         @DefaultValue Llm llm,
         @DefaultValue Market market,
         @DefaultValue Auth auth,
-        @DefaultValue Mail mail) {
+        @DefaultValue Mail mail,
+        @DefaultValue Sms sms) {
+
+    /**
+     * SMS notifications (card created / deleted / target hit), sent by calling the {@code send_sms} tool of the
+     * notification MCP server at {@code finally.mail.mcp-url} (the provider - {@code SMS_PROVIDER}, default
+     * {@code log} - is configured on that server). Sent only when {@code enabled} and the MCP URL is set.
+     */
+    public record Sms(@DefaultValue("true") boolean enabled) {
+    }
 
     /**
      * Target-price-hit alert emails, sent by calling the {@code send_email} tool of the email MCP server

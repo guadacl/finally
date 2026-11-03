@@ -7,6 +7,8 @@ export interface HttpOptions {
   serverFactory: () => McpServer;
   path?: string;
   log?: (message: string) => void;
+  /** When given, `GET /sms/outbox` returns the last sent SMS (read-only, masked numbers). */
+  smsOutbox?: { list(): unknown[] };
 }
 
 const MAX_BODY = 1024 * 1024;
@@ -43,11 +45,20 @@ function json(res: ServerResponse, status: number, body: unknown) {
  * Streamable HTTP endpoint (default `POST /mcp`) in stateless mode: every POST gets its own server + transport,
  * so no session state is kept and the container can restart at any time. `GET /health` is the healthcheck.
  */
-export function createHttpServer({ serverFactory, path = "/mcp", log = () => {} }: HttpOptions): Server {
+export function createHttpServer({ serverFactory, path = "/mcp", log = () => {}, smsOutbox }: HttpOptions): Server {
   return createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     if (url.pathname === "/health" && req.method === "GET") {
       json(res, 200, { status: "UP" });
+      return;
+    }
+    if (smsOutbox && url.pathname === "/sms/outbox") {
+      if (req.method !== "GET") {
+        json(res, 405, { error: "METHOD_NOT_ALLOWED", message: "read-only" });
+        return;
+      }
+      const messages = smsOutbox.list();
+      json(res, 200, { count: messages.length, messages });
       return;
     }
     if (url.pathname !== path) {

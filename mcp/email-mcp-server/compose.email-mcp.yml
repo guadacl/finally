@@ -1,7 +1,8 @@
-# Email MCP server for FinAlly (included by the root docker-compose.yml).
+# Notification MCP server for FinAlly (service name kept as email-mcp; included by the root docker-compose.yml).
 #
-# The app's Camunda "email-notify" worker calls this server's send_email tool (MCP over Streamable HTTP,
-# http://email-mcp:3001/mcp); it relays the email over SMTP. Internal only: no host port.
+# The app's Camunda "email-notify" / "sms-notify" workers call this server's send_email / send_sms tools (MCP over
+# Streamable HTTP, http://email-mcp:3001/mcp); it relays emails over SMTP and SMS via SMS_PROVIDER (default: log).
+# Internal only: no host port (GET /health and GET /sms/outbox are reachable from the compose network only).
 # Default SMTP target is the bundled Mailpit (read the emails at http://localhost:8025).
 # For a real SMTP server set MAIL_HOST / MAIL_PORT / MAIL_USERNAME / MAIL_PASSWORD / MAIL_STARTTLS in .env.
 
@@ -23,6 +24,9 @@ services:
       MAIL_FROM: ${MAIL_FROM:-FinAlly <alerts@finally.local>}
       MAIL_STARTTLS: ${MAIL_STARTTLS:-false}
       MAIL_SECURE: ${MAIL_SECURE:-}
+      # send_sms provider: "log" (default) writes each SMS as one log line (masked number), no real SMS, no cost.
+      # Check them with:  docker logs finally-email-mcp | grep "\[sms\]"   or   GET http://email-mcp:3001/sms/outbox
+      SMS_PROVIDER: ${SMS_PROVIDER:-log}
     expose:
       - "3001"
     depends_on:

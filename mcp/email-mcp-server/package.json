@@ -1,7 +1,7 @@
 {
   "name": "email-mcp-server",
-  "version": "0.2.0",
-  "description": "FinAlly email MCP server: one tool, send_email, delivered over SMTP (nodemailer)",
+  "version": "0.3.0",
+  "description": "FinAlly notification MCP server: send_email over SMTP (nodemailer) and send_sms via a pluggable provider (default: log)",
   "private": true,
   "type": "module",
   "bin": {

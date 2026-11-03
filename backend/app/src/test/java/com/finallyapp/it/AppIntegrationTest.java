@@ -17,7 +17,9 @@ import com.finallyapp.contracts.Notification;
 import com.finallyapp.contracts.NotificationType;
 import com.finallyapp.contracts.NotificationEmailer;
 import com.finallyapp.mail.EmailGateway;
-import com.finallyapp.mail.UserEmails;
+import com.finallyapp.mail.SmsGateway;
+import com.finallyapp.mail.UserContacts;
+import com.finallyapp.contracts.NotificationSms;
 import com.finallyapp.workflow.DirectKanbanWorkflow;
 import org.springframework.beans.factory.ObjectProvider;
 import com.finallyapp.market.PriceCache;
@@ -89,12 +91,16 @@ class AppIntegrationTest {
     @Autowired
     ObjectProvider<NotificationEmailer> emailerProvider;
     @Autowired
-    UserEmails userEmails;
+    UserContacts userContacts;
+    @Autowired
+    ObjectProvider<NotificationSms> smsProvider;
 
     @MockitoBean
     KanbanWorkflow workflow;
     @MockitoBean
     EmailGateway emailGateway;
+    @MockitoBean
+    SmsGateway smsGateway;
 
     private final HttpClient http = HttpClient.newHttpClient();
 
@@ -370,18 +376,25 @@ class AppIntegrationTest {
 
     @Test
     @Order(9)
-    void cardEventsAreEmailedToTheStoredAddress() {
-        // V5 migration: users_profile.email; stored the way the login filter does it
-        userEmails.remember("default", "demo@finally.local");
+    void cardEventsAreEmailedAndTextedToTheStoredContacts() {
+        // V5 / V6 migrations: users_profile.email / phone; stored the way the login filter does it
+        userContacts.rememberEmail("default", "demo@finally.local");
+        userContacts.rememberPhone("default", "+32 470 12 34 56");
         assertThat(jdbc.sql("SELECT email FROM users_profile WHERE id = 'default'").query(String.class).single())
                 .isEqualTo("demo@finally.local");
-        assertThat(userEmails.find("nobody")).isEmpty();
+        assertThat(jdbc.sql("SELECT phone FROM users_profile WHERE id = 'default'").query(String.class).single())
+                .isEqualTo("+32470123456");
+        assertThat(userContacts.email("nobody")).isEmpty();
+        // invalid numbers are ignored, a missing claim clears the number
+        userContacts.rememberPhone("default", "not a number");
+        assertThat(userContacts.phone("default")).contains("+32470123456");
 
         KanbanCardRef card = new KanbanCardRef(UUID.randomUUID(), "AAPL", KanbanColumn.RESISTANCE,
                 new BigDecimal("200"), "default");
-        // the Camunda-down fallback wired with the real app beans (SSE publisher + NotificationMailer):
-        // toast for every type; one email each for created, target hit and deleted - none for moved
-        DirectKanbanWorkflow fallback = new DirectKanbanWorkflow(notifications, emailerProvider);
+        // the Camunda-down fallback wired with the real app beans (SSE publisher + NotificationMailer +
+        // NotificationSmsSender): toast for every type; one email and one SMS each for created, target hit and
+        // deleted - none for moved
+        DirectKanbanWorkflow fallback = new DirectKanbanWorkflow(notifications, emailerProvider, smsProvider);
         fallback.cardCreated(card);
         fallback.cardMoved(card);
         fallback.targetPriceHit(card, new BigDecimal("200.10"));
@@ -396,6 +409,16 @@ class AppIntegrationTest {
                 "FinAlly alert: AAPL hit Resistance 200.00",
                 "FinAlly: Resistance card AAPL @ 200.00 deleted");
         assertThat(body.getAllValues().get(1)).contains("Current price: 200.10").contains("/alerts");
+
+        org.mockito.ArgumentCaptor<String> sms = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(smsGateway, timeout(5000).times(3)).sendSms(eq("+32470123456"), sms.capture());
+        assertThat(sms.getAllValues()).containsExactly(
+                "FinAlly: new Resistance card AAPL @ 200.00",
+                "FinAlly: AAPL hit Resistance 200.00 (now 200.10)",
+                "FinAlly: Resistance card AAPL @ 200.00 deleted");
+
+        userContacts.rememberPhone("default", null);
+        assertThat(userContacts.phone("default")).isEmpty();
     }
 
     /** Reads SSE lines until {@code wanted} non-empty event lines have been collected (or 10 s pass). */

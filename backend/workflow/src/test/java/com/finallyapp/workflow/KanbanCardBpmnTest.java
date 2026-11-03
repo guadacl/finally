@@ -7,6 +7,7 @@ import io.camunda.zeebe.model.bpmn.instance.FlowNode;
 import io.camunda.zeebe.model.bpmn.instance.IntermediateCatchEvent;
 import io.camunda.zeebe.model.bpmn.instance.Message;
 import io.camunda.zeebe.model.bpmn.instance.MessageEventDefinition;
+import io.camunda.zeebe.model.bpmn.instance.ParallelGateway;
 import io.camunda.zeebe.model.bpmn.instance.Process;
 import io.camunda.zeebe.model.bpmn.instance.SequenceFlow;
 import io.camunda.zeebe.model.bpmn.instance.ServiceTask;
@@ -77,66 +78,91 @@ class KanbanCardBpmnTest {
     }
 
     @Test
-    void everyServiceTaskIsNotifyOrEmailWithTypeHeader() {
+    void everyServiceTaskIsNotifyEmailOrSmsWithTypeHeader() {
         Collection<ServiceTask> tasks = model.getModelElementsByType(ServiceTask.class);
-        assertThat(tasks).hasSize(9);
+        assertThat(tasks).hasSize(13);
         assertThat(tasks).extracting(KanbanCardBpmnTest::type)
-                .containsOnly(KanbanProcess.JOB_TYPE_NOTIFY, KanbanProcess.JOB_TYPE_EMAIL);
+                .containsOnly(KanbanProcess.JOB_TYPE_NOTIFY, KanbanProcess.JOB_TYPE_EMAIL, KanbanProcess.JOB_TYPE_SMS);
 
-        List<String> toasts = tasks.stream().filter(t -> type(t).equals(KanbanProcess.JOB_TYPE_NOTIFY))
-                .map(KanbanCardBpmnTest::header).toList();
+        List<String> toasts = headersOf(tasks, KanbanProcess.JOB_TYPE_NOTIFY);
         assertThat(toasts).containsExactlyInAnyOrder("CARD_CREATED", "CARD_CREATED", "TARGET_HIT", "CARD_MOVED",
                 "CARD_DELETED");
-
-        // emails: created (both columns), deleted, target hit - never moved
-        List<String> emails = tasks.stream().filter(t -> type(t).equals(KanbanProcess.JOB_TYPE_EMAIL))
-                .map(KanbanCardBpmnTest::header).toList();
-        assertThat(emails).containsExactlyInAnyOrder("CARD_CREATED", "CARD_CREATED", "CARD_DELETED", "TARGET_HIT");
+        // email and SMS: created (both columns), deleted, target hit - never moved
+        for (String channel : List.of(KanbanProcess.JOB_TYPE_EMAIL, KanbanProcess.JOB_TYPE_SMS)) {
+            assertThat(headersOf(tasks, channel)).as(channel)
+                    .containsExactlyInAnyOrder("CARD_CREATED", "CARD_CREATED", "CARD_DELETED", "TARGET_HIT");
+        }
     }
 
-    /** Asserts start -> toast -> email -> end with the given ids. */
-    private static void assertToastThenEmail(String fromId, String toastId, String emailId, String nextId) {
-        FlowNode from = model.getModelElementById(fromId);
-        FlowNode toast = from.getOutgoing().iterator().next().getTarget();
-        assertThat(toast.getId()).isEqualTo(toastId);
-        FlowNode email = toast.getOutgoing().iterator().next().getTarget();
-        assertThat(email.getId()).isEqualTo(emailId);
-        assertThat(type((ServiceTask) email)).isEqualTo(KanbanProcess.JOB_TYPE_EMAIL);
-        assertThat(header((ServiceTask) email)).isEqualTo(header((ServiceTask) toast));
-        assertThat(email.getOutgoing().iterator().next().getTarget().getId()).isEqualTo(nextId);
+    private static List<String> headersOf(Collection<ServiceTask> tasks, String jobType) {
+        return tasks.stream().filter(t -> type(t).equals(jobType)).map(KanbanCardBpmnTest::header).toList();
+    }
+
+    private static FlowNode single(FlowNode node) {
+        assertThat(node.getOutgoing()).as("outgoing of " + node.getId()).hasSize(1);
+        return node.getOutgoing().iterator().next().getTarget();
+    }
+
+    /**
+     * Asserts toast -> parallel split -> {email, sms} (same header as the toast) -> parallel join -> next,
+     * and returns nothing; ids of email / SMS are checked when given.
+     */
+    private static void assertToastThenParallelEmailAndSms(String toastId, String emailId, String smsId, String nextId) {
+        ServiceTask toast = model.getModelElementById(toastId);
+        assertThat(type(toast)).isEqualTo(KanbanProcess.JOB_TYPE_NOTIFY);
+        FlowNode split = single(toast);
+        assertThat(split).isInstanceOf(ParallelGateway.class);
+        List<FlowNode> branches = split.getOutgoing().stream().map(SequenceFlow::getTarget).toList();
+        assertThat(branches).extracting(FlowNode::getId).containsExactlyInAnyOrder(emailId, smsId);
+        assertThat(branches).allSatisfy(b -> assertThat(header((ServiceTask) b)).isEqualTo(header(toast)));
+        assertThat(type(model.getModelElementById(emailId))).isEqualTo(KanbanProcess.JOB_TYPE_EMAIL);
+        assertThat(type(model.getModelElementById(smsId))).isEqualTo(KanbanProcess.JOB_TYPE_SMS);
+
+        FlowNode join = single(branches.get(0));
+        assertThat(join).isInstanceOf(ParallelGateway.class);
+        assertThat(single(branches.get(1))).isSameAs(join);
+        assertThat(join.getIncoming()).hasSize(2);
+        assertThat(single(join).getId()).isEqualTo(nextId);
     }
 
     @Test
-    void targetHitSendsToastThenEmail() {
-        assertToastThenEmail("StartEvent_TargetPriceHit", "Task_NotifyTargetHit", "Task_EmailTargetHit",
+    void targetHitSendsToastThenEmailAndSmsInParallel() {
+        StartEvent start = model.getModelElementById("StartEvent_TargetPriceHit");
+        assertThat(single(start).getId()).isEqualTo("Task_NotifyTargetHit");
+        assertToastThenParallelEmailAndSms("Task_NotifyTargetHit", "Task_EmailTargetHit", "Task_SmsTargetHit",
                 "EndEvent_TargetHitNotified");
     }
 
     @Test
-    void cardCreatedSendsToastThenEmailOnBothGatewayBranches() {
+    void cardCreatedSendsToastThenEmailAndSmsInParallelOnBothGatewayBranches() {
         SequenceFlow support = model.getModelElementById("Flow_Support");
         SequenceFlow resistance = model.getModelElementById("Flow_Resistance");
         assertThat(support.getTarget().getId()).isEqualTo("Task_NotifyCreatedSupport");
         assertThat(resistance.getTarget().getId()).isEqualTo("Task_NotifyCreatedResistance");
-        FlowNode supportEmail = support.getTarget().getOutgoing().iterator().next().getTarget();
-        FlowNode resistanceEmail = resistance.getTarget().getOutgoing().iterator().next().getTarget();
-        for (FlowNode email : List.of(supportEmail, resistanceEmail)) {
-            assertThat(type((ServiceTask) email)).isEqualTo(KanbanProcess.JOB_TYPE_EMAIL);
-            assertThat(header((ServiceTask) email)).isEqualTo("CARD_CREATED");
-            assertThat(email.getOutgoing().iterator().next().getTarget().getId()).isEqualTo("Gateway_Merge");
-        }
+        assertToastThenParallelEmailAndSms("Task_NotifyCreatedSupport", "Task_EmailCreatedSupport",
+                "Task_SmsCreatedSupport", "Gateway_Merge");
+        assertToastThenParallelEmailAndSms("Task_NotifyCreatedResistance", "Task_EmailCreatedResistance",
+                "Task_SmsCreatedResistance", "Gateway_Merge");
+        assertThat((FlowNode) model.getModelElementById("Gateway_Merge")).isInstanceOf(ExclusiveGateway.class);
     }
 
     @Test
-    void cardDeletedSendsToastThenEmailBeforeEnding() {
-        assertToastThenEmail("Event_CardDeleted", "Task_NotifyCardDeleted", KanbanProcess.TASK_EMAIL_CARD_DELETED,
-                "EndEvent_CardDeleted");
+    void cardDeletedSendsToastThenEmailAndSmsInParallelBeforeEnding() {
+        IntermediateCatchEvent deleted = model.getModelElementById("Event_CardDeleted");
+        assertThat(single(deleted).getId()).isEqualTo("Task_NotifyCardDeleted");
+        assertToastThenParallelEmailAndSms("Task_NotifyCardDeleted", KanbanProcess.TASK_EMAIL_CARD_DELETED,
+                KanbanProcess.TASK_SMS_CARD_DELETED, "EndEvent_CardDeleted");
     }
 
     @Test
-    void cardMovedIsNotEmailed() {
+    void cardMovedIsToastOnly() {
         FlowNode toast = model.getModelElementById("Task_NotifyCardMoved");
-        assertThat(toast.getOutgoing().iterator().next().getTarget().getId()).isEqualTo("EndEvent_CardMovedNotified");
+        assertThat(single(toast).getId()).isEqualTo("EndEvent_CardMovedNotified");
+    }
+
+    @Test
+    void parallelGatewaysOnlyAroundEmailAndSms() {
+        assertThat(model.getModelElementsByType(ParallelGateway.class)).hasSize(8);
     }
 
     @Test

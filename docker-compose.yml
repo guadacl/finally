@@ -42,6 +42,8 @@ services:
       # Target-price-hit alert emails: Camunda "email-notify" task -> MCP tool send_email on the email-mcp service
       # -> SMTP (bundled Mailpit by default, read them at http://localhost:8025). SMTP settings live on email-mcp.
       MAIL_ENABLED: ${MAIL_ENABLED:-true}
+      # SMS in parallel with each email (same MCP server, tool send_sms; provider SMS_PROVIDER on email-mcp)
+      SMS_ENABLED: ${SMS_ENABLED:-true}
       EMAIL_MCP_URL: ${EMAIL_MCP_URL:-http://email-mcp:3001/mcp}
       APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:${APP_PORT:-8000}}
     ports:

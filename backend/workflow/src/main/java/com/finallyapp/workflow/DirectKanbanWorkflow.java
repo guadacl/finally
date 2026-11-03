@@ -5,6 +5,7 @@ import com.finallyapp.contracts.KanbanWorkflow;
 import com.finallyapp.contracts.Notification;
 import com.finallyapp.contracts.NotificationEmailer;
 import com.finallyapp.contracts.NotificationPublisher;
+import com.finallyapp.contracts.NotificationSms;
 import com.finallyapp.contracts.NotificationType;
 import java.math.BigDecimal;
 import java.util.function.Supplier;
@@ -16,10 +17,11 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
- * {@link KanbanWorkflow} without Camunda: publishes the notifications directly and emails CARD_CREATED,
- * CARD_DELETED and TARGET_HIT (what the process's {@code email-notify} tasks would do).
- * Active when {@code finally.workflow.enabled=false} (e.g. backend tests). Also used internally by
- * {@link CamundaKanbanWorkflow} as its fallback, so each event is emailed exactly once on either path.
+ * {@link KanbanWorkflow} without Camunda: publishes the notifications directly and sends CARD_CREATED,
+ * CARD_DELETED and TARGET_HIT as email and SMS (what the process's parallel {@code email-notify} /
+ * {@code sms-notify} tasks would do). Active when {@code finally.workflow.enabled=false} (e.g. backend tests).
+ * Also used internally by {@link CamundaKanbanWorkflow} as its fallback, so each event is emailed and texted
+ * exactly once on either path.
  */
 @Component
 @ConditionalOnProperty(name = "finally.workflow.enabled", havingValue = "false")
@@ -28,42 +30,63 @@ public class DirectKanbanWorkflow implements KanbanWorkflow {
     private static final Logger log = LoggerFactory.getLogger(DirectKanbanWorkflow.class);
 
     private final NotificationPublisher publisher;
-    /** Supplies null when there is no emailer (e.g. the workflow module on its own). */
+    /** Each supplies null when there is no such bean (e.g. the workflow module on its own). */
     private final Supplier<NotificationEmailer> emailer;
+    private final Supplier<NotificationSms> sms;
 
     public DirectKanbanWorkflow(NotificationPublisher publisher) {
-        this(publisher, () -> null);
+        this(publisher, () -> null, () -> null);
+    }
+
+    /** Email but no SMS. */
+    public DirectKanbanWorkflow(NotificationPublisher publisher, ObjectProvider<NotificationEmailer> emailer) {
+        this(publisher, emailer::getIfAvailable, () -> null);
     }
 
     @Autowired
-    public DirectKanbanWorkflow(NotificationPublisher publisher, ObjectProvider<NotificationEmailer> emailer) {
-        this(publisher, (Supplier<NotificationEmailer>) emailer::getIfAvailable);
+    public DirectKanbanWorkflow(NotificationPublisher publisher, ObjectProvider<NotificationEmailer> emailer,
+                                ObjectProvider<NotificationSms> sms) {
+        this(publisher, emailer::getIfAvailable, sms::getIfAvailable);
     }
 
-    DirectKanbanWorkflow(NotificationPublisher publisher, Supplier<NotificationEmailer> emailer) {
+    DirectKanbanWorkflow(NotificationPublisher publisher, Supplier<NotificationEmailer> emailer,
+                         Supplier<NotificationSms> sms) {
         this.publisher = publisher;
         this.emailer = emailer;
+        this.sms = sms;
     }
 
     @Override
     public Long cardCreated(KanbanCardRef card) {
-        email(publish(NotificationType.CARD_CREATED, card, null));
+        emailAndSms(publish(NotificationType.CARD_CREATED, card, null));
         return null;
     }
 
     @Override
     public void cardMoved(KanbanCardRef card) {
-        publish(NotificationType.CARD_MOVED, card, null); // toast only, never emailed
+        publish(NotificationType.CARD_MOVED, card, null); // toast only, never emailed or texted
     }
 
     @Override
     public void targetPriceHit(KanbanCardRef card, BigDecimal price) {
-        email(publish(NotificationType.TARGET_HIT, card, price));
+        emailAndSms(publish(NotificationType.TARGET_HIT, card, price));
     }
 
     @Override
     public void cardDeleted(KanbanCardRef card, Long processInstanceKey) {
-        email(publish(NotificationType.CARD_DELETED, card, null));
+        emailAndSms(publish(NotificationType.CARD_DELETED, card, null));
+    }
+
+    /**
+     * Deletion of a card whose process version already toasted and emailed but has no SMS task: sends only the
+     * SMS (no second toast or email).
+     */
+    void cardDeletedSmsOnly(KanbanCardRef card) {
+        try {
+            sms(NotificationMessages.build(NotificationType.CARD_DELETED, card, null));
+        } catch (Exception e) {
+            log.warn("Could not build CARD_DELETED SMS for card {}: {}", card == null ? null : card.id(), e.toString());
+        }
     }
 
     /** Publishes the toast; returns the notification (also when publishing failed), null if it could not be built. */
@@ -84,6 +107,12 @@ public class DirectKanbanWorkflow implements KanbanWorkflow {
         return n;
     }
 
+    /** Both channels, independently (one failing never stops the other). */
+    void emailAndSms(Notification n) {
+        email(n);
+        sms(n);
+    }
+
     /** Hands the notification to the emailer (non-blocking, never throws). */
     void email(Notification n) {
         if (n == null || !NotificationEmailer.isEmailed(n.type())) {
@@ -96,6 +125,21 @@ public class DirectKanbanWorkflow implements KanbanWorkflow {
             }
         } catch (Exception e) {
             log.warn("Could not send {} email for card {}: {}", n.type(), n.cardId(), e.toString());
+        }
+    }
+
+    /** Hands the notification to the SMS sender (non-blocking, never throws). */
+    void sms(Notification n) {
+        if (n == null || !NotificationSms.isSent(n.type())) {
+            return;
+        }
+        try {
+            NotificationSms s = sms.get();
+            if (s != null) {
+                s.send(n);
+            }
+        } catch (Exception e) {
+            log.warn("Could not send {} SMS for card {}: {}", n.type(), n.cardId(), e.toString());
         }
     }
 }

@@ -14,12 +14,13 @@
   <!--
     FinAlly kanban card lifecycle. One process instance per kanban card.
     Variables: cardId (string, correlation key), ticker, column (SUPPORT|RESISTANCE), targetPrice (number), price (number).
-    Messages (correlation key = cardId): card-moved {column, targetPrice}, target-price-hit {price}, card-deleted.
-    Every notification is sent by a service task of job type "finally-notify"; the notification type is
-    given by the task header "notificationType". Card created (both gateway branches), card deleted and
-    target-price hit additionally run an "email-notify" task after the toast (same header): email to the card
-    owner through the email MCP server (mcp/email-mcp-server). Card moved is not emailed.
-    card-deleted carries {ticker, column, targetPrice, userId}; the main flow then notifies, emails and ends.
+    Messages (correlation key = cardId): card-moved {column, targetPrice}, target-price-hit {price},
+    card-deleted {ticker, column, targetPrice, userId}.
+    Every in-app notification (toast) is sent by a service task of job type "finally-notify"; the notification type
+    is given by the task header "notificationType". Card created (both column gateway branches), card deleted and
+    target-price hit then fork with a PARALLEL gateway into "Send email" (job type "email-notify") and "Send SMS"
+    (job type "sms-notify"), same header, and join again before continuing / ending. Both go through the
+    notification MCP server (mcp/email-mcp-server, tools send_email / send_sms). Card moved is toast only.
   -->
 
   <bpmn:message id="Message_CardDeleted" name="card-deleted">
@@ -58,8 +59,14 @@
         </zeebe:taskHeaders>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_Support</bpmn:incoming>
-      <bpmn:outgoing>Flow_SupportToEmail</bpmn:outgoing>
+      <bpmn:outgoing>Flow_CreatedSupportToSplit</bpmn:outgoing>
     </bpmn:serviceTask>
+
+    <bpmn:parallelGateway id="Gateway_SplitCreatedSupport" name="Email and SMS">
+      <bpmn:incoming>Flow_CreatedSupportToSplit</bpmn:incoming>
+      <bpmn:outgoing>Flow_CreatedSupportToEmail</bpmn:outgoing>
+      <bpmn:outgoing>Flow_CreatedSupportToSms</bpmn:outgoing>
+    </bpmn:parallelGateway>
 
     <bpmn:serviceTask id="Task_EmailCreatedSupport" name="Send email: card created in Support">
       <bpmn:extensionElements>
@@ -68,9 +75,26 @@
           <zeebe:header key="notificationType" value="CARD_CREATED" />
         </zeebe:taskHeaders>
       </bpmn:extensionElements>
-      <bpmn:incoming>Flow_SupportToEmail</bpmn:incoming>
-      <bpmn:outgoing>Flow_SupportToMerge</bpmn:outgoing>
+      <bpmn:incoming>Flow_CreatedSupportToEmail</bpmn:incoming>
+      <bpmn:outgoing>Flow_CreatedSupportEmailToJoin</bpmn:outgoing>
     </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_SmsCreatedSupport" name="Send SMS: card created in Support">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="sms-notify" retries="3" />
+        <zeebe:taskHeaders>
+          <zeebe:header key="notificationType" value="CARD_CREATED" />
+        </zeebe:taskHeaders>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_CreatedSupportToSms</bpmn:incoming>
+      <bpmn:outgoing>Flow_CreatedSupportSmsToJoin</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:parallelGateway id="Gateway_JoinCreatedSupport">
+      <bpmn:incoming>Flow_CreatedSupportEmailToJoin</bpmn:incoming>
+      <bpmn:incoming>Flow_CreatedSupportSmsToJoin</bpmn:incoming>
+      <bpmn:outgoing>Flow_SupportToMerge</bpmn:outgoing>
+    </bpmn:parallelGateway>
 
     <bpmn:serviceTask id="Task_NotifyCreatedResistance" name="Notify: card created in Resistance">
       <bpmn:extensionElements>
@@ -80,8 +104,14 @@
         </zeebe:taskHeaders>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_Resistance</bpmn:incoming>
-      <bpmn:outgoing>Flow_ResistanceToEmail</bpmn:outgoing>
+      <bpmn:outgoing>Flow_CreatedResistanceToSplit</bpmn:outgoing>
     </bpmn:serviceTask>
+
+    <bpmn:parallelGateway id="Gateway_SplitCreatedResistance" name="Email and SMS">
+      <bpmn:incoming>Flow_CreatedResistanceToSplit</bpmn:incoming>
+      <bpmn:outgoing>Flow_CreatedResistanceToEmail</bpmn:outgoing>
+      <bpmn:outgoing>Flow_CreatedResistanceToSms</bpmn:outgoing>
+    </bpmn:parallelGateway>
 
     <bpmn:serviceTask id="Task_EmailCreatedResistance" name="Send email: card created in Resistance">
       <bpmn:extensionElements>
@@ -90,9 +120,26 @@
           <zeebe:header key="notificationType" value="CARD_CREATED" />
         </zeebe:taskHeaders>
       </bpmn:extensionElements>
-      <bpmn:incoming>Flow_ResistanceToEmail</bpmn:incoming>
-      <bpmn:outgoing>Flow_ResistanceToMerge</bpmn:outgoing>
+      <bpmn:incoming>Flow_CreatedResistanceToEmail</bpmn:incoming>
+      <bpmn:outgoing>Flow_CreatedResistanceEmailToJoin</bpmn:outgoing>
     </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_SmsCreatedResistance" name="Send SMS: card created in Resistance">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="sms-notify" retries="3" />
+        <zeebe:taskHeaders>
+          <zeebe:header key="notificationType" value="CARD_CREATED" />
+        </zeebe:taskHeaders>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_CreatedResistanceToSms</bpmn:incoming>
+      <bpmn:outgoing>Flow_CreatedResistanceSmsToJoin</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:parallelGateway id="Gateway_JoinCreatedResistance">
+      <bpmn:incoming>Flow_CreatedResistanceEmailToJoin</bpmn:incoming>
+      <bpmn:incoming>Flow_CreatedResistanceSmsToJoin</bpmn:incoming>
+      <bpmn:outgoing>Flow_ResistanceToMerge</bpmn:outgoing>
+    </bpmn:parallelGateway>
 
     <bpmn:exclusiveGateway id="Gateway_Merge">
       <bpmn:incoming>Flow_SupportToMerge</bpmn:incoming>
@@ -115,8 +162,14 @@
         </zeebe:taskHeaders>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_DeletedToNotify</bpmn:incoming>
-      <bpmn:outgoing>Flow_DeletedToEmail</bpmn:outgoing>
+      <bpmn:outgoing>Flow_CardDeletedToSplit</bpmn:outgoing>
     </bpmn:serviceTask>
+
+    <bpmn:parallelGateway id="Gateway_SplitCardDeleted" name="Email and SMS">
+      <bpmn:incoming>Flow_CardDeletedToSplit</bpmn:incoming>
+      <bpmn:outgoing>Flow_CardDeletedToEmail</bpmn:outgoing>
+      <bpmn:outgoing>Flow_CardDeletedToSms</bpmn:outgoing>
+    </bpmn:parallelGateway>
 
     <bpmn:serviceTask id="Task_EmailCardDeleted" name="Send email: card deleted">
       <bpmn:extensionElements>
@@ -125,9 +178,26 @@
           <zeebe:header key="notificationType" value="CARD_DELETED" />
         </zeebe:taskHeaders>
       </bpmn:extensionElements>
-      <bpmn:incoming>Flow_DeletedToEmail</bpmn:incoming>
-      <bpmn:outgoing>Flow_ToEnd</bpmn:outgoing>
+      <bpmn:incoming>Flow_CardDeletedToEmail</bpmn:incoming>
+      <bpmn:outgoing>Flow_CardDeletedEmailToJoin</bpmn:outgoing>
     </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_SmsCardDeleted" name="Send SMS: card deleted">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="sms-notify" retries="3" />
+        <zeebe:taskHeaders>
+          <zeebe:header key="notificationType" value="CARD_DELETED" />
+        </zeebe:taskHeaders>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_CardDeletedToSms</bpmn:incoming>
+      <bpmn:outgoing>Flow_CardDeletedSmsToJoin</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:parallelGateway id="Gateway_JoinCardDeleted">
+      <bpmn:incoming>Flow_CardDeletedEmailToJoin</bpmn:incoming>
+      <bpmn:incoming>Flow_CardDeletedSmsToJoin</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToEnd</bpmn:outgoing>
+    </bpmn:parallelGateway>
 
     <bpmn:endEvent id="EndEvent_CardDeleted" name="Card removed">
       <bpmn:incoming>Flow_ToEnd</bpmn:incoming>
@@ -138,14 +208,26 @@
       <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=column = "SUPPORT"</bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_Resistance" name="RESISTANCE" sourceRef="Gateway_Column" targetRef="Task_NotifyCreatedResistance" />
-    <bpmn:sequenceFlow id="Flow_SupportToEmail" sourceRef="Task_NotifyCreatedSupport" targetRef="Task_EmailCreatedSupport" />
-    <bpmn:sequenceFlow id="Flow_SupportToMerge" sourceRef="Task_EmailCreatedSupport" targetRef="Gateway_Merge" />
-    <bpmn:sequenceFlow id="Flow_ResistanceToEmail" sourceRef="Task_NotifyCreatedResistance" targetRef="Task_EmailCreatedResistance" />
-    <bpmn:sequenceFlow id="Flow_ResistanceToMerge" sourceRef="Task_EmailCreatedResistance" targetRef="Gateway_Merge" />
+    <bpmn:sequenceFlow id="Flow_CreatedSupportToSplit" sourceRef="Task_NotifyCreatedSupport" targetRef="Gateway_SplitCreatedSupport" />
+    <bpmn:sequenceFlow id="Flow_CreatedSupportToEmail" sourceRef="Gateway_SplitCreatedSupport" targetRef="Task_EmailCreatedSupport" />
+    <bpmn:sequenceFlow id="Flow_CreatedSupportToSms" sourceRef="Gateway_SplitCreatedSupport" targetRef="Task_SmsCreatedSupport" />
+    <bpmn:sequenceFlow id="Flow_CreatedSupportEmailToJoin" sourceRef="Task_EmailCreatedSupport" targetRef="Gateway_JoinCreatedSupport" />
+    <bpmn:sequenceFlow id="Flow_CreatedSupportSmsToJoin" sourceRef="Task_SmsCreatedSupport" targetRef="Gateway_JoinCreatedSupport" />
+    <bpmn:sequenceFlow id="Flow_SupportToMerge" sourceRef="Gateway_JoinCreatedSupport" targetRef="Gateway_Merge" />
+    <bpmn:sequenceFlow id="Flow_CreatedResistanceToSplit" sourceRef="Task_NotifyCreatedResistance" targetRef="Gateway_SplitCreatedResistance" />
+    <bpmn:sequenceFlow id="Flow_CreatedResistanceToEmail" sourceRef="Gateway_SplitCreatedResistance" targetRef="Task_EmailCreatedResistance" />
+    <bpmn:sequenceFlow id="Flow_CreatedResistanceToSms" sourceRef="Gateway_SplitCreatedResistance" targetRef="Task_SmsCreatedResistance" />
+    <bpmn:sequenceFlow id="Flow_CreatedResistanceEmailToJoin" sourceRef="Task_EmailCreatedResistance" targetRef="Gateway_JoinCreatedResistance" />
+    <bpmn:sequenceFlow id="Flow_CreatedResistanceSmsToJoin" sourceRef="Task_SmsCreatedResistance" targetRef="Gateway_JoinCreatedResistance" />
+    <bpmn:sequenceFlow id="Flow_ResistanceToMerge" sourceRef="Gateway_JoinCreatedResistance" targetRef="Gateway_Merge" />
     <bpmn:sequenceFlow id="Flow_ToWaitDeleted" sourceRef="Gateway_Merge" targetRef="Event_CardDeleted" />
     <bpmn:sequenceFlow id="Flow_DeletedToNotify" sourceRef="Event_CardDeleted" targetRef="Task_NotifyCardDeleted" />
-    <bpmn:sequenceFlow id="Flow_DeletedToEmail" sourceRef="Task_NotifyCardDeleted" targetRef="Task_EmailCardDeleted" />
-    <bpmn:sequenceFlow id="Flow_ToEnd" sourceRef="Task_EmailCardDeleted" targetRef="EndEvent_CardDeleted" />
+    <bpmn:sequenceFlow id="Flow_CardDeletedToSplit" sourceRef="Task_NotifyCardDeleted" targetRef="Gateway_SplitCardDeleted" />
+    <bpmn:sequenceFlow id="Flow_CardDeletedToEmail" sourceRef="Gateway_SplitCardDeleted" targetRef="Task_EmailCardDeleted" />
+    <bpmn:sequenceFlow id="Flow_CardDeletedToSms" sourceRef="Gateway_SplitCardDeleted" targetRef="Task_SmsCardDeleted" />
+    <bpmn:sequenceFlow id="Flow_CardDeletedEmailToJoin" sourceRef="Task_EmailCardDeleted" targetRef="Gateway_JoinCardDeleted" />
+    <bpmn:sequenceFlow id="Flow_CardDeletedSmsToJoin" sourceRef="Task_SmsCardDeleted" targetRef="Gateway_JoinCardDeleted" />
+    <bpmn:sequenceFlow id="Flow_ToEnd" sourceRef="Gateway_JoinCardDeleted" targetRef="EndEvent_CardDeleted" />
 
     <!-- Live price reached the target: non-interrupting, may fire many times during the card's life. -->
     <bpmn:subProcess id="EventSub_TargetPriceHit" name="Target price hit" triggeredByEvent="true">
@@ -153,6 +235,7 @@
         <bpmn:outgoing>Flow_TargetHitToNotify</bpmn:outgoing>
         <bpmn:messageEventDefinition id="MessageEventDefinition_TargetPriceHit" messageRef="Message_TargetPriceHit" />
       </bpmn:startEvent>
+
       <bpmn:serviceTask id="Task_NotifyTargetHit" name="Notify: target price hit">
         <bpmn:extensionElements>
           <zeebe:taskDefinition type="finally-notify" retries="3" />
@@ -161,10 +244,15 @@
           </zeebe:taskHeaders>
         </bpmn:extensionElements>
         <bpmn:incoming>Flow_TargetHitToNotify</bpmn:incoming>
-        <bpmn:outgoing>Flow_TargetHitToEmail</bpmn:outgoing>
+        <bpmn:outgoing>Flow_TargetHitToSplit</bpmn:outgoing>
       </bpmn:serviceTask>
-      <!-- After the in-app toast: email the card owner through the email MCP server (mcp/email-mcp-server).
-           The email-notify worker always completes the job (failures are logged), so mail problems never create incidents. -->
+
+      <bpmn:parallelGateway id="Gateway_SplitTargetHit" name="Email and SMS">
+        <bpmn:incoming>Flow_TargetHitToSplit</bpmn:incoming>
+        <bpmn:outgoing>Flow_TargetHitToEmail</bpmn:outgoing>
+        <bpmn:outgoing>Flow_TargetHitToSms</bpmn:outgoing>
+      </bpmn:parallelGateway>
+
       <bpmn:serviceTask id="Task_EmailTargetHit" name="Send email: target price hit">
         <bpmn:extensionElements>
           <zeebe:taskDefinition type="email-notify" retries="3" />
@@ -173,14 +261,36 @@
           </zeebe:taskHeaders>
         </bpmn:extensionElements>
         <bpmn:incoming>Flow_TargetHitToEmail</bpmn:incoming>
-        <bpmn:outgoing>Flow_TargetHitToEnd</bpmn:outgoing>
+        <bpmn:outgoing>Flow_TargetHitEmailToJoin</bpmn:outgoing>
       </bpmn:serviceTask>
+
+      <bpmn:serviceTask id="Task_SmsTargetHit" name="Send SMS: target price hit">
+        <bpmn:extensionElements>
+          <zeebe:taskDefinition type="sms-notify" retries="3" />
+          <zeebe:taskHeaders>
+            <zeebe:header key="notificationType" value="TARGET_HIT" />
+          </zeebe:taskHeaders>
+        </bpmn:extensionElements>
+        <bpmn:incoming>Flow_TargetHitToSms</bpmn:incoming>
+        <bpmn:outgoing>Flow_TargetHitSmsToJoin</bpmn:outgoing>
+      </bpmn:serviceTask>
+
+      <bpmn:parallelGateway id="Gateway_JoinTargetHit">
+        <bpmn:incoming>Flow_TargetHitEmailToJoin</bpmn:incoming>
+        <bpmn:incoming>Flow_TargetHitSmsToJoin</bpmn:incoming>
+        <bpmn:outgoing>Flow_TargetHitToEnd</bpmn:outgoing>
+      </bpmn:parallelGateway>
+
       <bpmn:endEvent id="EndEvent_TargetHitNotified" name="Alert sent">
         <bpmn:incoming>Flow_TargetHitToEnd</bpmn:incoming>
       </bpmn:endEvent>
       <bpmn:sequenceFlow id="Flow_TargetHitToNotify" sourceRef="StartEvent_TargetPriceHit" targetRef="Task_NotifyTargetHit" />
-      <bpmn:sequenceFlow id="Flow_TargetHitToEmail" sourceRef="Task_NotifyTargetHit" targetRef="Task_EmailTargetHit" />
-      <bpmn:sequenceFlow id="Flow_TargetHitToEnd" sourceRef="Task_EmailTargetHit" targetRef="EndEvent_TargetHitNotified" />
+      <bpmn:sequenceFlow id="Flow_TargetHitToSplit" sourceRef="Task_NotifyTargetHit" targetRef="Gateway_SplitTargetHit" />
+      <bpmn:sequenceFlow id="Flow_TargetHitToEmail" sourceRef="Gateway_SplitTargetHit" targetRef="Task_EmailTargetHit" />
+      <bpmn:sequenceFlow id="Flow_TargetHitToSms" sourceRef="Gateway_SplitTargetHit" targetRef="Task_SmsTargetHit" />
+      <bpmn:sequenceFlow id="Flow_TargetHitEmailToJoin" sourceRef="Task_EmailTargetHit" targetRef="Gateway_JoinTargetHit" />
+      <bpmn:sequenceFlow id="Flow_TargetHitSmsToJoin" sourceRef="Task_SmsTargetHit" targetRef="Gateway_JoinTargetHit" />
+      <bpmn:sequenceFlow id="Flow_TargetHitToEnd" sourceRef="Gateway_JoinTargetHit" targetRef="EndEvent_TargetHitNotified" />
     </bpmn:subProcess>
 
     <!-- Card moved / target edited: message variables (column, targetPrice) update the process variables. -->
@@ -210,144 +320,248 @@
   <bpmndi:BPMNDiagram id="BPMNDiagram_KanbanCard">
     <bpmndi:BPMNPlane id="BPMNPlane_KanbanCard" bpmnElement="kanban-card">
       <bpmndi:BPMNShape id="StartEvent_CardCreated_di" bpmnElement="StartEvent_CardCreated">
-        <dc:Bounds x="152" y="182" width="36" height="36" />
-        <bpmndi:BPMNLabel><dc:Bounds x="139" y="225" width="62" height="14" /></bpmndi:BPMNLabel>
+        <dc:Bounds x="152" y="262" width="36" height="36" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Gateway_Column_di" bpmnElement="Gateway_Column" isMarkerVisible="true">
-        <dc:Bounds x="235" y="175" width="50" height="50" />
-        <bpmndi:BPMNLabel><dc:Bounds x="292" y="193" width="42" height="14" /></bpmndi:BPMNLabel>
+        <dc:Bounds x="235" y="255" width="50" height="50" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Task_NotifyCreatedSupport_di" bpmnElement="Task_NotifyCreatedSupport">
-        <dc:Bounds x="340" y="80" width="120" height="80" />
+        <dc:Bounds x="340" y="90" width="120" height="80" />
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="Task_NotifyCreatedResistance_di" bpmnElement="Task_NotifyCreatedResistance">
-        <dc:Bounds x="340" y="250" width="120" height="80" />
+      <bpmndi:BPMNShape id="Gateway_SplitCreatedSupport_di" bpmnElement="Gateway_SplitCreatedSupport">
+        <dc:Bounds x="500" y="105" width="50" height="50" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Task_EmailCreatedSupport_di" bpmnElement="Task_EmailCreatedSupport">
-        <dc:Bounds x="500" y="80" width="120" height="80" />
+        <dc:Bounds x="590" y="30" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_SmsCreatedSupport_di" bpmnElement="Task_SmsCreatedSupport">
+        <dc:Bounds x="590" y="150" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_JoinCreatedSupport_di" bpmnElement="Gateway_JoinCreatedSupport">
+        <dc:Bounds x="750" y="105" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_NotifyCreatedResistance_di" bpmnElement="Task_NotifyCreatedResistance">
+        <dc:Bounds x="340" y="390" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_SplitCreatedResistance_di" bpmnElement="Gateway_SplitCreatedResistance">
+        <dc:Bounds x="500" y="405" width="50" height="50" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Task_EmailCreatedResistance_di" bpmnElement="Task_EmailCreatedResistance">
-        <dc:Bounds x="500" y="250" width="120" height="80" />
+        <dc:Bounds x="590" y="330" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_SmsCreatedResistance_di" bpmnElement="Task_SmsCreatedResistance">
+        <dc:Bounds x="590" y="450" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_JoinCreatedResistance_di" bpmnElement="Gateway_JoinCreatedResistance">
+        <dc:Bounds x="750" y="405" width="50" height="50" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Gateway_Merge_di" bpmnElement="Gateway_Merge" isMarkerVisible="true">
-        <dc:Bounds x="675" y="175" width="50" height="50" />
+        <dc:Bounds x="840" y="255" width="50" height="50" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Event_CardDeleted_di" bpmnElement="Event_CardDeleted">
-        <dc:Bounds x="772" y="182" width="36" height="36" />
-        <bpmndi:BPMNLabel><dc:Bounds x="759" y="225" width="62" height="14" /></bpmndi:BPMNLabel>
+        <dc:Bounds x="930" y="262" width="36" height="36" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Task_NotifyCardDeleted_di" bpmnElement="Task_NotifyCardDeleted">
-        <dc:Bounds x="850" y="160" width="120" height="80" />
+        <dc:Bounds x="1010" y="240" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_SplitCardDeleted_di" bpmnElement="Gateway_SplitCardDeleted">
+        <dc:Bounds x="1170" y="255" width="50" height="50" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Task_EmailCardDeleted_di" bpmnElement="Task_EmailCardDeleted">
-        <dc:Bounds x="1010" y="160" width="120" height="80" />
+        <dc:Bounds x="1260" y="180" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_SmsCardDeleted_di" bpmnElement="Task_SmsCardDeleted">
+        <dc:Bounds x="1260" y="300" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_JoinCardDeleted_di" bpmnElement="Gateway_JoinCardDeleted">
+        <dc:Bounds x="1420" y="255" width="50" height="50" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="EndEvent_CardDeleted_di" bpmnElement="EndEvent_CardDeleted">
-        <dc:Bounds x="1172" y="182" width="36" height="36" />
-        <bpmndi:BPMNLabel><dc:Bounds x="1156" y="225" width="68" height="14" /></bpmndi:BPMNLabel>
+        <dc:Bounds x="1512" y="262" width="36" height="36" />
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNEdge id="Flow_ToColumnGateway_di" bpmnElement="Flow_ToColumnGateway">
-        <di:waypoint x="188" y="200" />
-        <di:waypoint x="235" y="200" />
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_Support_di" bpmnElement="Flow_Support">
-        <di:waypoint x="260" y="175" />
-        <di:waypoint x="260" y="120" />
-        <di:waypoint x="340" y="120" />
-        <bpmndi:BPMNLabel><dc:Bounds x="268" y="100" width="50" height="14" /></bpmndi:BPMNLabel>
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_Resistance_di" bpmnElement="Flow_Resistance">
-        <di:waypoint x="260" y="225" />
-        <di:waypoint x="260" y="290" />
-        <di:waypoint x="340" y="290" />
-        <bpmndi:BPMNLabel><dc:Bounds x="266" y="296" width="64" height="14" /></bpmndi:BPMNLabel>
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_SupportToEmail_di" bpmnElement="Flow_SupportToEmail">
-        <di:waypoint x="460" y="120" />
-        <di:waypoint x="500" y="120" />
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_ResistanceToEmail_di" bpmnElement="Flow_ResistanceToEmail">
-        <di:waypoint x="460" y="290" />
-        <di:waypoint x="500" y="290" />
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_SupportToMerge_di" bpmnElement="Flow_SupportToMerge">
-        <di:waypoint x="620" y="120" />
-        <di:waypoint x="700" y="120" />
-        <di:waypoint x="700" y="175" />
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_ResistanceToMerge_di" bpmnElement="Flow_ResistanceToMerge">
-        <di:waypoint x="620" y="290" />
-        <di:waypoint x="700" y="290" />
-        <di:waypoint x="700" y="225" />
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_ToWaitDeleted_di" bpmnElement="Flow_ToWaitDeleted">
-        <di:waypoint x="725" y="200" />
-        <di:waypoint x="772" y="200" />
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_DeletedToNotify_di" bpmnElement="Flow_DeletedToNotify">
-        <di:waypoint x="808" y="200" />
-        <di:waypoint x="850" y="200" />
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_DeletedToEmail_di" bpmnElement="Flow_DeletedToEmail">
-        <di:waypoint x="970" y="200" />
-        <di:waypoint x="1010" y="200" />
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_ToEnd_di" bpmnElement="Flow_ToEnd">
-        <di:waypoint x="1130" y="200" />
-        <di:waypoint x="1172" y="200" />
-      </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNShape id="EventSub_TargetPriceHit_di" bpmnElement="EventSub_TargetPriceHit" isExpanded="true">
-        <dc:Bounds x="160" y="380" width="620" height="140" />
+        <dc:Bounds x="160" y="600" width="760" height="260" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="StartEvent_TargetPriceHit_di" bpmnElement="StartEvent_TargetPriceHit">
-        <dc:Bounds x="200" y="432" width="36" height="36" />
-        <bpmndi:BPMNLabel><dc:Bounds x="180" y="475" width="76" height="14" /></bpmndi:BPMNLabel>
+        <dc:Bounds x="200" y="712" width="36" height="36" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Task_NotifyTargetHit_di" bpmnElement="Task_NotifyTargetHit">
-        <dc:Bounds x="290" y="410" width="120" height="80" />
+        <dc:Bounds x="290" y="690" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_SplitTargetHit_di" bpmnElement="Gateway_SplitTargetHit">
+        <dc:Bounds x="450" y="705" width="50" height="50" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Task_EmailTargetHit_di" bpmnElement="Task_EmailTargetHit">
-        <dc:Bounds x="460" y="410" width="120" height="80" />
+        <dc:Bounds x="540" y="630" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_SmsTargetHit_di" bpmnElement="Task_SmsTargetHit">
+        <dc:Bounds x="540" y="750" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_JoinTargetHit_di" bpmnElement="Gateway_JoinTargetHit">
+        <dc:Bounds x="700" y="705" width="50" height="50" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="EndEvent_TargetHitNotified_di" bpmnElement="EndEvent_TargetHitNotified">
-        <dc:Bounds x="642" y="432" width="36" height="36" />
-        <bpmndi:BPMNLabel><dc:Bounds x="636" y="475" width="48" height="14" /></bpmndi:BPMNLabel>
+        <dc:Bounds x="842" y="712" width="36" height="36" />
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNEdge id="Flow_TargetHitToNotify_di" bpmnElement="Flow_TargetHitToNotify">
-        <di:waypoint x="236" y="450" />
-        <di:waypoint x="290" y="450" />
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_TargetHitToEmail_di" bpmnElement="Flow_TargetHitToEmail">
-        <di:waypoint x="410" y="450" />
-        <di:waypoint x="460" y="450" />
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="Flow_TargetHitToEnd_di" bpmnElement="Flow_TargetHitToEnd">
-        <di:waypoint x="580" y="450" />
-        <di:waypoint x="642" y="450" />
-      </bpmndi:BPMNEdge>
-
       <bpmndi:BPMNShape id="EventSub_CardMoved_di" bpmnElement="EventSub_CardMoved" isExpanded="true">
-        <dc:Bounds x="160" y="560" width="460" height="140" />
+        <dc:Bounds x="160" y="900" width="460" height="140" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="StartEvent_CardMoved_di" bpmnElement="StartEvent_CardMoved">
-        <dc:Bounds x="200" y="612" width="36" height="36" />
-        <bpmndi:BPMNLabel><dc:Bounds x="188" y="655" width="60" height="14" /></bpmndi:BPMNLabel>
+        <dc:Bounds x="200" y="952" width="36" height="36" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Task_NotifyCardMoved_di" bpmnElement="Task_NotifyCardMoved">
-        <dc:Bounds x="290" y="590" width="120" height="80" />
+        <dc:Bounds x="290" y="930" width="120" height="80" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="EndEvent_CardMovedNotified_di" bpmnElement="EndEvent_CardMovedNotified">
-        <dc:Bounds x="472" y="612" width="36" height="36" />
-        <bpmndi:BPMNLabel><dc:Bounds x="456" y="655" width="68" height="14" /></bpmndi:BPMNLabel>
+        <dc:Bounds x="472" y="952" width="36" height="36" />
       </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_ToColumnGateway_di" bpmnElement="Flow_ToColumnGateway">
+        <di:waypoint x="188" y="280" />
+        <di:waypoint x="235" y="280" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Support_di" bpmnElement="Flow_Support">
+        <di:waypoint x="260" y="255" />
+        <di:waypoint x="260" y="130" />
+        <di:waypoint x="340" y="130" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Resistance_di" bpmnElement="Flow_Resistance">
+        <di:waypoint x="260" y="305" />
+        <di:waypoint x="260" y="430" />
+        <di:waypoint x="340" y="430" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CreatedSupportToSplit_di" bpmnElement="Flow_CreatedSupportToSplit">
+        <di:waypoint x="460" y="130" />
+        <di:waypoint x="500" y="130" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CreatedSupportToEmail_di" bpmnElement="Flow_CreatedSupportToEmail">
+        <di:waypoint x="525" y="105" />
+        <di:waypoint x="525" y="70" />
+        <di:waypoint x="590" y="70" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CreatedSupportToSms_di" bpmnElement="Flow_CreatedSupportToSms">
+        <di:waypoint x="525" y="155" />
+        <di:waypoint x="525" y="190" />
+        <di:waypoint x="590" y="190" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CreatedSupportEmailToJoin_di" bpmnElement="Flow_CreatedSupportEmailToJoin">
+        <di:waypoint x="710" y="70" />
+        <di:waypoint x="775" y="70" />
+        <di:waypoint x="775" y="105" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CreatedSupportSmsToJoin_di" bpmnElement="Flow_CreatedSupportSmsToJoin">
+        <di:waypoint x="710" y="190" />
+        <di:waypoint x="775" y="190" />
+        <di:waypoint x="775" y="155" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_SupportToMerge_di" bpmnElement="Flow_SupportToMerge">
+        <di:waypoint x="800" y="130" />
+        <di:waypoint x="865" y="130" />
+        <di:waypoint x="865" y="255" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CreatedResistanceToSplit_di" bpmnElement="Flow_CreatedResistanceToSplit">
+        <di:waypoint x="460" y="430" />
+        <di:waypoint x="500" y="430" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CreatedResistanceToEmail_di" bpmnElement="Flow_CreatedResistanceToEmail">
+        <di:waypoint x="525" y="405" />
+        <di:waypoint x="525" y="370" />
+        <di:waypoint x="590" y="370" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CreatedResistanceToSms_di" bpmnElement="Flow_CreatedResistanceToSms">
+        <di:waypoint x="525" y="455" />
+        <di:waypoint x="525" y="490" />
+        <di:waypoint x="590" y="490" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CreatedResistanceEmailToJoin_di" bpmnElement="Flow_CreatedResistanceEmailToJoin">
+        <di:waypoint x="710" y="370" />
+        <di:waypoint x="775" y="370" />
+        <di:waypoint x="775" y="405" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CreatedResistanceSmsToJoin_di" bpmnElement="Flow_CreatedResistanceSmsToJoin">
+        <di:waypoint x="710" y="490" />
+        <di:waypoint x="775" y="490" />
+        <di:waypoint x="775" y="455" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ResistanceToMerge_di" bpmnElement="Flow_ResistanceToMerge">
+        <di:waypoint x="800" y="430" />
+        <di:waypoint x="865" y="430" />
+        <di:waypoint x="865" y="305" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ToWaitDeleted_di" bpmnElement="Flow_ToWaitDeleted">
+        <di:waypoint x="890" y="280" />
+        <di:waypoint x="930" y="280" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_DeletedToNotify_di" bpmnElement="Flow_DeletedToNotify">
+        <di:waypoint x="966" y="280" />
+        <di:waypoint x="1010" y="280" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CardDeletedToSplit_di" bpmnElement="Flow_CardDeletedToSplit">
+        <di:waypoint x="1130" y="280" />
+        <di:waypoint x="1170" y="280" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CardDeletedToEmail_di" bpmnElement="Flow_CardDeletedToEmail">
+        <di:waypoint x="1195" y="255" />
+        <di:waypoint x="1195" y="220" />
+        <di:waypoint x="1260" y="220" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CardDeletedToSms_di" bpmnElement="Flow_CardDeletedToSms">
+        <di:waypoint x="1195" y="305" />
+        <di:waypoint x="1195" y="340" />
+        <di:waypoint x="1260" y="340" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CardDeletedEmailToJoin_di" bpmnElement="Flow_CardDeletedEmailToJoin">
+        <di:waypoint x="1380" y="220" />
+        <di:waypoint x="1445" y="220" />
+        <di:waypoint x="1445" y="255" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_CardDeletedSmsToJoin_di" bpmnElement="Flow_CardDeletedSmsToJoin">
+        <di:waypoint x="1380" y="340" />
+        <di:waypoint x="1445" y="340" />
+        <di:waypoint x="1445" y="305" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ToEnd_di" bpmnElement="Flow_ToEnd">
+        <di:waypoint x="1470" y="280" />
+        <di:waypoint x="1512" y="280" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_TargetHitToNotify_di" bpmnElement="Flow_TargetHitToNotify">
+        <di:waypoint x="236" y="730" />
+        <di:waypoint x="290" y="730" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_TargetHitToSplit_di" bpmnElement="Flow_TargetHitToSplit">
+        <di:waypoint x="410" y="730" />
+        <di:waypoint x="450" y="730" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_TargetHitToEmail_di" bpmnElement="Flow_TargetHitToEmail">
+        <di:waypoint x="475" y="705" />
+        <di:waypoint x="475" y="670" />
+        <di:waypoint x="540" y="670" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_TargetHitToSms_di" bpmnElement="Flow_TargetHitToSms">
+        <di:waypoint x="475" y="755" />
+        <di:waypoint x="475" y="790" />
+        <di:waypoint x="540" y="790" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_TargetHitEmailToJoin_di" bpmnElement="Flow_TargetHitEmailToJoin">
+        <di:waypoint x="660" y="670" />
+        <di:waypoint x="725" y="670" />
+        <di:waypoint x="725" y="705" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_TargetHitSmsToJoin_di" bpmnElement="Flow_TargetHitSmsToJoin">
+        <di:waypoint x="660" y="790" />
+        <di:waypoint x="725" y="790" />
+        <di:waypoint x="725" y="755" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_TargetHitToEnd_di" bpmnElement="Flow_TargetHitToEnd">
+        <di:waypoint x="750" y="730" />
+        <di:waypoint x="842" y="730" />
+      </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_MovedToNotify_di" bpmnElement="Flow_MovedToNotify">
-        <di:waypoint x="236" y="630" />
-        <di:waypoint x="290" y="630" />
+        <di:waypoint x="236" y="970" />
+        <di:waypoint x="290" y="970" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_MovedToEnd_di" bpmnElement="Flow_MovedToEnd">
-        <di:waypoint x="410" y="630" />
-        <di:waypoint x="472" y="630" />
+        <di:waypoint x="410" y="970" />
+        <di:waypoint x="472" y="970" />
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
