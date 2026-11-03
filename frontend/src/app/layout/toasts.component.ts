@@ -98,6 +98,8 @@ export class ToastsComponent {
         return 'Card created';
       case 'CARD_MOVED':
         return 'Card moved';
+      case 'CARD_DELETED':
+        return 'Card deleted';
       default:
         return type.toLowerCase();
     }

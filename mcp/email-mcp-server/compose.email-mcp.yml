@@ -11,16 +11,18 @@ services:
       context: .
     image: finally-email-mcp:latest
     container_name: finally-email-mcp
-    env_file:
-      - path: ../../.env
-        required: false
+    # Only the SMTP settings are passed (interpolated from the root .env); the container never sees the app's
+    # other secrets (OpenRouter, Finnhub, Massive, Keycloak).
     environment:
       MCP_PORT: "3001"
       MCP_PATH: /mcp
       MAIL_HOST: ${MAIL_HOST:-mailpit}
       MAIL_PORT: ${MAIL_PORT:-1025}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       MAIL_FROM: ${MAIL_FROM:-FinAlly <alerts@finally.local>}
       MAIL_STARTTLS: ${MAIL_STARTTLS:-false}
+      MAIL_SECURE: ${MAIL_SECURE:-}
     expose:
       - "3001"
     depends_on:

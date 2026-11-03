@@ -41,6 +41,13 @@ describe('ToastsComponent', () => {
     expect(els[0].textContent).toContain('Support');
     expect(els[1].textContent).toContain('Resistance');
     expect(els[0].textContent).not.toContain('SUPPORT');
+    expect(els[1].textContent).toContain('Card created');
+    toasts.show({ type: 'CARD_DELETED', ticker: 'NVDA', column: 'SUPPORT', targetPrice: 150, message: 'Support card deleted: NVDA @ 150.00' });
+    fixture.detectChanges();
+    els = root.querySelectorAll('[data-testid="toast"]');
+    expect(els[2].textContent).toContain('Card deleted');
+    toasts.dismiss(toasts.toasts()[2].id);
+    fixture.detectChanges();
 
     vi.advanceTimersByTime(TOAST_DURATION_MS - 1000);
     fixture.detectChanges();

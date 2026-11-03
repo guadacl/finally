@@ -247,6 +247,7 @@ class AppIntegrationTest {
         Res withNote = call("POST", "/api/kanban", "{\"ticker\":\"msft\",\"column\":\"SUPPORT\",\"targetPrice\":1,\"comment\":\"from alert\"}");
         assertThat(withNote.body().path("comment").asText()).isEqualTo("from alert");
         assertThat(call("DELETE", "/api/kanban/" + withNote.body().path("id").asText(), null).status()).isEqualTo(204);
+        clearInvocations(workflow); // so the checks below only see the lifecycle card's deletion
 
         Res list = call("GET", "/api/kanban", null);
         assertThat(list.body().size()).isEqualTo(1);
@@ -256,7 +257,7 @@ class AppIntegrationTest {
         org.mockito.ArgumentCaptor<KanbanCardRef> deleted = org.mockito.ArgumentCaptor.forClass(KanbanCardRef.class);
         verify(workflow).cardDeleted(deleted.capture(), eq(4242L));
         assertThat(deleted.getValue().id()).isEqualTo(id);
-        assertThat(deleted.getValue().targetPrice()).isEqualByComparingTo("1");
+        assertThat(deleted.getValue().targetPrice()).isEqualByComparingTo("2"); // last edit above
         assertThat(deleted.getValue().userId()).isEqualTo("default");
         assertThat(deleted.getValue().ticker()).isNotBlank();
         assertThat(call("DELETE", "/api/kanban/" + id, null).status()).isEqualTo(404);

@@ -209,7 +209,7 @@ export interface KanbanCardUpdate {
   comment?: string;
 }
 
-export type NotificationType = 'CARD_CREATED' | 'CARD_MOVED' | 'TARGET_HIT';
+export type NotificationType = 'CARD_CREATED' | 'CARD_MOVED' | 'CARD_DELETED' | 'TARGET_HIT';
 
 export interface Notification {
   id: string;
