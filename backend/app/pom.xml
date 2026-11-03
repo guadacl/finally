@@ -12,6 +12,10 @@
   <name>FinAlly application</name>
   <description>Spring Boot app (runnable jar). Owned by the Backend agent.</description>
 
+  <properties>
+    <mcp-sdk.version>2.1.0</mcp-sdk.version>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>com.finallyapp</groupId>
@@ -55,6 +59,19 @@
     <dependency>
       <groupId>org.springframework.session</groupId>
       <artifactId>spring-session-jdbc</artifactId>
+    </dependency>
+    <!-- Target-price-hit alert emails: MCP client for the email MCP server (mcp/email-mcp-server).
+         mcp-core + the Jackson 2 binding instead of the io.modelcontextprotocol.sdk:mcp aggregator,
+         which pulls in Jackson 3 next to Spring Boot 3.5's Jackson 2. -->
+    <dependency>
+      <groupId>io.modelcontextprotocol.sdk</groupId>
+      <artifactId>mcp-core</artifactId>
+      <version>${mcp-sdk.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.modelcontextprotocol.sdk</groupId>
+      <artifactId>mcp-json-jackson2</artifactId>
+      <version>${mcp-sdk.version}</version>
     </dependency>
     <dependency>
       <groupId>org.flywaydb</groupId>

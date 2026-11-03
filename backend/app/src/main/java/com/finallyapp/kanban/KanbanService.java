@@ -105,11 +105,12 @@ public class KanbanService {
     }
 
     public void delete(UUID id) {
+        // read first: the workflow needs the card's last ticker / column / target / owner for the deletion email
         CardRow cur = repo.find(id).orElseThrow(() -> notFound(id));
         repo.delete(id);
         alerts.remove(id);
         try {
-            workflow.cardDeleted(id);
+            workflow.cardDeleted(ref(cur), cur.processInstanceKey());
         } catch (RuntimeException e) {
             log.error("KanbanWorkflow.cardDeleted failed for {}: {}", id, e.toString());
         }

@@ -1,0 +1,35 @@
+{
+  "name": "email-mcp-server",
+  "version": "0.2.0",
+  "description": "FinAlly email MCP server: one tool, send_email, delivered over SMTP (nodemailer)",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "email-mcp-server": "./build/index.js"
+  },
+  "files": [
+    "build"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
+    "start": "node build/index.js",
+    "start:stdio": "node build/index.js --stdio",
+    "watch": "tsc --watch",
+    "test": "vitest run",
+    "inspector": "npx @modelcontextprotocol/inspector build/index.js --stdio"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "nodemailer": "^7.0.10",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "@types/nodemailer": "^7.0.4",
+    "typescript": "^5.3.3",
+    "vitest": "^3.2.4"
+  }
+}
