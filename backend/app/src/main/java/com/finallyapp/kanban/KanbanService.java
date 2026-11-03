@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 public class KanbanService {
 
     private static final Logger log = LoggerFactory.getLogger(KanbanService.class);
+    static final int MAX_COMMENT = 500;
 
     private final KanbanRepository repo;
     private final KanbanWorkflow workflow;
@@ -52,8 +53,9 @@ public class KanbanService {
         }
         KanbanColumn column = KanbanColumn.valueOf(req.getColumn().getValue());
         BigDecimal target = validatePrice(req.getTargetPrice());
+        String comment = comment(req.getComment());
 
-        CardRow row = repo.insert(ticker, column, target);
+        CardRow row = repo.insert(ticker, column, target, comment);
         tracker.track(ticker);
         Long key = null;
         try {
@@ -64,17 +66,21 @@ public class KanbanService {
         if (key != null) {
             repo.setProcessInstanceKey(row.id(), key);
             row = new CardRow(row.id(), row.ticker(), row.column(), row.targetPrice(), row.sortOrder(), row.armed(),
-                    key, row.createdAt(), row.updatedAt(), row.userId());
+                    key, row.createdAt(), row.updatedAt(), row.userId(), row.comment());
         }
         alerts.put(row.id(), row.userId(), row.ticker(), row.column(), row.targetPrice(), row.armed());
         return toDto(row);
     }
 
-    /** Moves (column / sortOrder) and/or edits the target. Column or target change re-arms and notifies Camunda. */
+    /**
+     * Moves (column / sortOrder) and/or edits the target and comment. Column or target change re-arms and notifies
+     * Camunda; a comment change does neither. {@code comment} absent = unchanged, blank = cleared.
+     */
     public KanbanCard update(UUID id, KanbanCardUpdate req) {
         CardRow cur = repo.find(id).orElseThrow(() -> notFound(id));
         KanbanColumn column = req.getColumn() == null ? cur.column() : KanbanColumn.valueOf(req.getColumn().getValue());
         BigDecimal target = req.getTargetPrice() == null ? cur.targetPrice() : validatePrice(req.getTargetPrice());
+        String comment = req.getComment() == null ? cur.comment() : comment(req.getComment());
         if (req.getSortOrder() != null && req.getSortOrder() < 0) {
             throw ApiException.badRequest(ErrorCodes.INVALID_REQUEST, "sortOrder must be >= 0");
         }
@@ -91,7 +97,7 @@ public class KanbanService {
             sortOrder = cur.sortOrder();
         }
         boolean armed = (columnChanged || targetChanged) || cur.armed();
-        CardRow row = repo.update(id, column, target, sortOrder, armed);
+        CardRow row = repo.update(id, column, target, sortOrder, armed, comment);
 
         if (columnChanged || targetChanged) {
             alerts.put(row.id(), row.userId(), row.ticker(), row.column(), row.targetPrice(), row.armed());
@@ -134,6 +140,22 @@ public class KanbanService {
         return scaled;
     }
 
+    /** Trimmed comment, null when blank; 400 when longer than {@link #MAX_COMMENT}. */
+    static String comment(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String c = raw.trim();
+        if (c.isEmpty()) {
+            return null;
+        }
+        if (c.length() > MAX_COMMENT) {
+            throw ApiException.badRequest(ErrorCodes.INVALID_REQUEST,
+                    "The comment can be at most " + MAX_COMMENT + " characters");
+        }
+        return c;
+    }
+
     private static ApiException notFound(UUID id) {
         return ApiException.notFound(ErrorCodes.NOT_FOUND, "Kanban card " + id + " not found");
     }
@@ -147,6 +169,7 @@ public class KanbanService {
                 com.finallyapp.api.model.KanbanColumn.fromValue(r.column().name()),
                 r.targetPrice().stripTrailingZeros(), r.sortOrder(), r.armed(), r.createdAt(), r.updatedAt());
         c.setCurrentPrice(cache.price(r.ticker()));
+        c.setComment(r.comment());
         return c;
     }
 }

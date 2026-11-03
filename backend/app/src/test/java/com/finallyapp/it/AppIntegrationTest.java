@@ -3,6 +3,7 @@ package com.finallyapp.it;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -217,6 +218,20 @@ class AppIntegrationTest {
 
         Res bad = call("PATCH", "/api/kanban/" + id, "{\"targetPrice\":-5}");
         assertThat(bad.status()).isEqualTo(400);
+
+        // Comment: editable, trimmed, cleared with "", kept when absent; never notifies Camunda.
+        clearInvocations(workflow);
+        Res commented = call("PATCH", "/api/kanban/" + id, "{\"comment\":\"  watch earnings \"}");
+        assertThat(commented.status()).isEqualTo(200);
+        assertThat(commented.body().path("comment").asText()).isEqualTo("watch earnings");
+        assertThat(call("PATCH", "/api/kanban/" + id, "{\"targetPrice\":2}").body().path("comment").asText())
+                .isEqualTo("watch earnings");
+        verify(workflow).cardMoved(any()); // the target edit only, not the comment edit
+        assertThat(call("PATCH", "/api/kanban/" + id, "{\"comment\":\"" + "x".repeat(501) + "\"}").status()).isEqualTo(400);
+        assertThat(call("PATCH", "/api/kanban/" + id, "{\"comment\":\"\"}").body().path("comment").isNull()).isTrue();
+        Res withNote = call("POST", "/api/kanban", "{\"ticker\":\"msft\",\"column\":\"SUPPORT\",\"targetPrice\":1,\"comment\":\"from alert\"}");
+        assertThat(withNote.body().path("comment").asText()).isEqualTo("from alert");
+        assertThat(call("DELETE", "/api/kanban/" + withNote.body().path("id").asText(), null).status()).isEqualTo(204);
 
         Res list = call("GET", "/api/kanban", null);
         assertThat(list.body().size()).isEqualTo(1);

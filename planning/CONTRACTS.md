@@ -129,7 +129,8 @@ API: GET /api/alerts, POST /api/alerts {ticker, upperLimit?, lowerLimit?, commen
 
 Alerts page behaviour:
 - Each row also shows `rsi`: RSI(14), Wilder smoothing, on daily closes from Massive end-of-day aggregates (`DailyCloses`, ~150 calendar days, one ticker per 20 s, cached per day), with the live price as today's close during the session. `null` without `MASSIVE_API_KEY` or until the history has loaded. UI: ≥ 70 overbought, ≤ 30 oversold.
-- Adding an alert also creates kanban cards: `lowerLimit` → a SUPPORT card, `upperLimit` → a RESISTANCE card (frontend, via `POST /api/kanban`; deleting the alert leaves the cards).
+- Adding an alert also creates kanban cards: `lowerLimit` → a SUPPORT card, `upperLimit` → a RESISTANCE card (frontend, via `POST /api/kanban`; deleting the alert leaves the cards). The alert form's comment is copied onto those cards.
+- The alerts list does **not** show a comment column; comments live on the kanban cards (`kanban_cards.comment`, V4, ≤ 500 chars). Each card's target price and comment are editable inline (`PATCH /api/kanban/{id}` with `targetPrice` and/or `comment`; `comment: ""` clears it; a comment edit does not re-arm the card or notify Camunda). `price_alerts.comment` is still stored but no longer displayed.
 
 Indexes: `trades(user_id, executed_at)`, `portfolio_snapshots(user_id, recorded_at)`, `chat_messages(user_id, created_at)`, `kanban_cards(user_id, column_name, sort_order)`.
 

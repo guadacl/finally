@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
 import { isObservable } from 'rxjs';
 import { KanbanCard, errorMessage } from '../../api/models';
-import { KanbanService, cardDistance, targetHint } from '../../core/kanban.service';
+import { KanbanService, MAX_CARD_COMMENT, cardDistance, targetHint } from '../../core/kanban.service';
 import { PriceStreamService } from '../../core/price-stream.service';
 import { PctPipe, PricePipe } from '../../shared/format';
 import { PriceFlashDirective } from '../../shared/price-flash.directive';
@@ -13,8 +13,18 @@ import { PriceFlashDirective } from '../../shared/price-flash.directive';
   host: {
     '[attr.data-testid]': "'kanban-card-' + card().id",
     '[attr.data-armed]': 'card().armed',
+    '[attr.data-broken]': 'broken()',
+    '[attr.title]': "broken() ? 'Price is above this resistance target' : null",
     class: 'block rounded border border-edge bg-panel-2 px-2.5 py-2 shadow-sm shadow-black/20',
   },
+  styles: `
+    /* Resistance target below the current price: highlighted in the accent (alert) yellow. */
+    :host([data-broken='true']) {
+      border-color: #ecad0a;
+      background-color: rgba(236, 173, 10, 0.12);
+      box-shadow: 0 0 0 1px #ecad0a, 0 0 12px rgba(236, 173, 10, 0.35);
+    }
+  `,
   template: `
     <div class="flex items-center gap-2">
       <span class="cursor-grab text-muted select-none" title="Drag" aria-hidden="true">⋮⋮</span>
@@ -72,6 +82,22 @@ import { PriceFlashDirective } from '../../shared/price-flash.directive';
         />
       </label>
     </div>
+    <input
+      #commentInput
+      class="field mt-1.5 w-full py-0.5 text-[11px]"
+      placeholder="Add a comment…"
+      autocomplete="off"
+      [attr.maxlength]="maxComment"
+      [attr.data-testid]="'kanban-card-comment-' + card().id"
+      [attr.title]="card().comment ?? ''"
+      [value]="commentDraft()"
+      (input)="commentDraft.set(commentInput.value); error.set(null)"
+      (keydown.enter)="commentInput.blur()"
+      (keydown.escape)="cancelComment(); commentInput.blur()"
+      (blur)="commitComment()"
+      (mousedown)="$event.stopPropagation()"
+      (pointerdown)="$event.stopPropagation()"
+    />
     @if (error(); as e) {
       <div class="mt-1 text-[10.5px] text-down" [attr.data-testid]="'kanban-card-error-' + card().id">{{ e }}</div>
     } @else if (hint(); as h) {
@@ -92,10 +118,52 @@ export class KanbanCardComponent {
   readonly livePrice = computed(() => this.prices.state(this.card().ticker)()?.price ?? this.card().currentPrice ?? null);
   readonly distance = computed(() => cardDistance(this.card().targetPrice, this.livePrice()));
   readonly hint = computed(() => targetHint(this.card().column, this.card().targetPrice, this.livePrice()));
+  /** Resistance card whose target is below the current price (price has broken through it). */
+  readonly broken = computed(() => {
+    const p = this.livePrice();
+    return this.card().column === 'RESISTANCE' && p != null && this.card().targetPrice < p;
+  });
+
+  readonly maxComment = MAX_CARD_COMMENT;
+  readonly commentDraft = signal('');
+
+  // Per-field server values: a save of one field (new card object) must not reset what is being typed in the other.
+  private readonly serverTarget = computed(() => this.card().targetPrice);
+  private readonly serverComment = computed(() => this.card().comment ?? '');
 
   constructor() {
-    // Sync the editable field whenever the server value changes.
-    effect(() => this.draft.set(this.card().targetPrice.toFixed(2)));
+    // Sync each editable field only when its own server value changes.
+    effect(() => this.draft.set(this.serverTarget().toFixed(2)));
+    effect(() => this.commentDraft.set(this.serverComment()));
+  }
+
+  cancelComment(): void {
+    this.commentDraft.set(this.card().comment ?? '');
+    this.error.set(null);
+  }
+
+  commitComment(): void {
+    const result = this.kanban.updateComment(this.card(), this.commentDraft());
+    if (result === null) {
+      this.commentDraft.set(this.card().comment ?? '');
+      return;
+    }
+    if (typeof result === 'string') {
+      this.error.set(result);
+      return;
+    }
+    this.busy.set(true);
+    result.subscribe({
+      next: (saved) => {
+        this.busy.set(false);
+        this.error.set(null);
+        this.commentDraft.set(saved.comment ?? '');
+      },
+      error: (err) => {
+        this.busy.set(false);
+        this.error.set(errorMessage(err, 'Update failed'));
+      },
+    });
   }
 
   cancel(): void {

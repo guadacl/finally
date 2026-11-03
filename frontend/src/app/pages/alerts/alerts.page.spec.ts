@@ -67,11 +67,11 @@ describe('AlertsPage', () => {
       { status: 201, statusText: 'Created' });
     await fixture.whenStable();
 
-    // the lower limit becomes a Support card, the upper limit a Resistance card
+    // the lower limit becomes a Support card, the upper limit a Resistance card; both carry the comment
     const cardPosts = http.match({ method: 'POST', url: '/api/kanban' });
     expect(cardPosts.map((r) => r.request.body)).toEqual([
-      { ticker: 'MSFT', column: 'SUPPORT', targetPrice: 450 },
-      { ticker: 'MSFT', column: 'RESISTANCE', targetPrice: 600 },
+      { ticker: 'MSFT', column: 'SUPPORT', targetPrice: 450, comment: 'earnings week' },
+      { ticker: 'MSFT', column: 'RESISTANCE', targetPrice: 600, comment: 'earnings week' },
     ]);
     cardPosts.forEach((r, i) =>
       r.flush({ id: 'k' + i, ...r.request.body, sortOrder: i, armed: true, createdAt: '2026-11-03T10:00:00Z', updatedAt: '2026-11-03T10:00:00Z' },
@@ -83,7 +83,8 @@ describe('AlertsPage', () => {
     expect(q(root, 'alerts-form')).toBeNull();
     const row = q(root, 'alerts-row-x1')!;
     expect(row.textContent).toContain('MSFT');
-    expect(row.textContent).toContain('earnings week');
+    expect(row.textContent).not.toContain('earnings week'); // the comment lives on the cards now
+    expect((q(root, 'kanban-card-comment-k0') as HTMLInputElement).value).toBe('earnings week');
     expect(row.getAttribute('data-status')).toBe('inside');
   });
 

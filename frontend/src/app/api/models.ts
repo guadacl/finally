@@ -188,6 +188,8 @@ export interface KanbanCard {
   /** false after an alert fired, until the price crosses back */
   armed: boolean;
   currentPrice?: number | null;
+  /** Free-text note, editable on the card. */
+  comment?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -196,12 +198,15 @@ export interface KanbanCardCreate {
   ticker: string;
   column: KanbanColumn;
   targetPrice: number;
+  comment?: string | null;
 }
 
 export interface KanbanCardUpdate {
   column?: KanbanColumn;
   targetPrice?: number;
   sortOrder?: number;
+  /** Absent = unchanged; '' = cleared. Does not re-arm the card. */
+  comment?: string;
 }
 
 export type NotificationType = 'CARD_CREATED' | 'CARD_MOVED' | 'TARGET_HIT';

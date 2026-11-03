@@ -72,7 +72,7 @@ class MigrationsTest {
     @Order(1)
     void migrationsApplyCleanlyOnEmptyDatabase() throws SQLException {
         assertThat(firstRun.success).isTrue();
-        assertThat(firstRun.migrationsExecuted).isEqualTo(3);
+        assertThat(firstRun.migrationsExecuted).isEqualTo(4);
         assertThat(flyway().validateWithResult().validationSuccessful).isTrue();
 
         List<String> tables = new ArrayList<>();
