@@ -17,5 +17,10 @@ export const routes: Routes = [
     title: 'Portfolio · FinAlly',
     loadComponent: () => import('./pages/portfolio/portfolio.page').then((m) => m.PortfolioPage),
   },
+  {
+    path: 'alerts',
+    title: 'Alerts · FinAlly',
+    loadComponent: () => import('./pages/alerts/alerts.page').then((m) => m.AlertsPage),
+  },
   { path: '**', redirectTo: 'markets' },
 ];

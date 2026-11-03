@@ -112,6 +112,21 @@ kanban_cards(
   updated_at            TIMESTAMPTZ NOT NULL DEFAULT now())
 ```
 
+```sql
+price_alerts(                                     -- V3: Alerts page
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id      TEXT NOT NULL DEFAULT 'default',
+  ticker       TEXT NOT NULL,                     -- must be on the user's watchlist when created
+  upper_limit  NUMERIC(18,4) NULL CHECK (> 0),
+  lower_limit  NUMERIC(18,4) NULL CHECK (> 0),    -- at least one limit; lower < upper
+  comment      TEXT NULL,                         -- max 500 chars
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now())
+```
+
+```
+API: GET /api/alerts, POST /api/alerts {ticker, upperLimit?, lowerLimit?, comment?}, DELETE /api/alerts/{id}
+```
+
 Indexes: `trades(user_id, executed_at)`, `portfolio_snapshots(user_id, recorded_at)`, `chat_messages(user_id, created_at)`, `kanban_cards(user_id, column_name, sort_order)`.
 
 Seed (a separate migration, idempotent with `ON CONFLICT DO NOTHING`): profile `default` with 10000 cash; watchlist AAPL, GOOGL, MSFT, AMZN, TSLA, NVDA, META, JPM, V, NFLX. No seeded kanban cards.

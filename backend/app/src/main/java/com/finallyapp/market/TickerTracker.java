@@ -12,7 +12,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 
 /**
- * Keeps the market data source's ticker set equal to the watchlist ∪ kanban card ∪ open position tickers
+ * Keeps the market data source's ticker set equal to the watchlist ∪ kanban card ∪ open position ∪ price alert tickers
  * of <em>all</em> users (prices are shared; each user only sees their own lists).
  * Starts the source once the application (and Flyway) is ready.
  */
@@ -46,12 +46,13 @@ public class TickerTracker {
         source.addTicker(ticker);
     }
 
-    /** Stop pricing the ticker if no watchlist entry, kanban card or position references it anymore. */
+    /** Stop pricing the ticker if no watchlist entry, kanban card, position or price alert references it anymore. */
     public void untrackIfUnused(String ticker) {
         Integer refs = jdbc.sql("""
                         SELECT (SELECT count(*) FROM watchlist WHERE ticker = :t)
                              + (SELECT count(*) FROM kanban_cards WHERE ticker = :t)
                              + (SELECT count(*) FROM positions WHERE ticker = :t)
+                             + (SELECT count(*) FROM price_alerts WHERE ticker = :t)
                         """)
                 .param("t", ticker)
                 .query(Integer.class).single();
@@ -71,6 +72,7 @@ public class TickerTracker {
                           SELECT ticker, added_at AS ts, 0 AS src FROM watchlist
                           UNION ALL SELECT ticker, created_at, 1 FROM kanban_cards
                           UNION ALL SELECT ticker, updated_at, 2 FROM positions
+                          UNION ALL SELECT ticker, created_at, 3 FROM price_alerts
                         ) x GROUP BY ticker ORDER BY min(src), min(ts), ticker
                         """)
                 .query(String.class).list();

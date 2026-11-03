@@ -1,0 +1,212 @@
+import { DatePipe } from '@angular/common';
+import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+import { PriceAlert, errorMessage } from '../../api/models';
+import { AlertStatus, AlertsService, MAX_ALERT_COMMENT, alertStatus, buildAlert } from '../../core/alerts.service';
+import { PriceStreamService } from '../../core/price-stream.service';
+import { WatchlistService } from '../../core/watchlist.service';
+import { PricePipe } from '../../shared/format';
+import { PriceFlashDirective } from '../../shared/price-flash.directive';
+
+const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
+  above: { label: 'Above upper', cls: 'bg-up/15 text-up' },
+  below: { label: 'Below lower', cls: 'bg-down/15 text-down' },
+  inside: { label: 'In range', cls: 'bg-edge text-muted' },
+  unknown: { label: 'No price', cls: 'bg-edge text-muted' },
+};
+
+@Component({
+  selector: 'app-alerts-page',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [FormsModule, RouterLink, DatePipe, PricePipe, PriceFlashDirective],
+  host: { class: 'block h-full' },
+  template: `
+    <section class="panel mx-auto flex h-full max-w-6xl flex-col overflow-hidden">
+      <div class="panel-title">
+        <span>Price alerts</span>
+        <div class="flex items-center gap-3 normal-case tracking-normal">
+          <span class="num">{{ alerts.alerts().length }} alerts · prices stream live</span>
+          <button
+            type="button"
+            data-testid="alerts-add-button"
+            class="btn btn-submit flex h-7 w-7 items-center justify-center p-0 text-lg leading-none"
+            title="Add an alert"
+            aria-label="Add an alert"
+            [attr.aria-expanded]="formOpen()"
+            (click)="toggleForm()"
+          >
+            {{ formOpen() ? '×' : '+' }}
+          </button>
+        </div>
+      </div>
+
+      @if (formOpen()) {
+        <form class="grid gap-3 border-b border-edge bg-panel-2 p-3 md:grid-cols-[12rem_9rem_9rem_1fr_auto]" (ngSubmit)="save()" data-testid="alerts-form">
+          @if (watchlistTickers().length === 0) {
+            <p class="text-sm text-muted md:col-span-5">
+              Your watchlist is empty. <a routerLink="/watchlists" class="text-primary underline">Add stocks to your watchlist</a> first.
+            </p>
+          } @else {
+            <label class="flex flex-col gap-1">
+              <span class="text-[10px] tracking-widest text-muted uppercase">Stock (from watchlist)</span>
+              <select name="aTicker" data-testid="alerts-ticker" class="field" [ngModel]="ticker()" (ngModelChange)="ticker.set($event); error.set(null)">
+                <option value="" disabled>Choose a stock…</option>
+                @for (t of watchlistTickers(); track t) {
+                  <option [value]="t">{{ t }}</option>
+                }
+              </select>
+              <span class="num h-4 text-[11px] text-muted">
+                @if (selectedPrice() != null) { now {{ selectedPrice() | price }} }
+              </span>
+            </label>
+            <label class="flex flex-col gap-1">
+              <span class="text-[10px] tracking-widest text-muted uppercase">Upper limit</span>
+              <input name="aUpper" data-testid="alerts-upper" class="field num" inputmode="decimal" autocomplete="off" placeholder="e.g. 250.00"
+                [ngModel]="upper()" (ngModelChange)="upper.set($event); error.set(null)" />
+            </label>
+            <label class="flex flex-col gap-1">
+              <span class="text-[10px] tracking-widest text-muted uppercase">Lower limit</span>
+              <input name="aLower" data-testid="alerts-lower" class="field num" inputmode="decimal" autocomplete="off" placeholder="e.g. 180.00"
+                [ngModel]="lower()" (ngModelChange)="lower.set($event); error.set(null)" />
+            </label>
+            <label class="flex flex-col gap-1">
+              <span class="text-[10px] tracking-widest text-muted uppercase">Comment</span>
+              <input name="aComment" data-testid="alerts-comment" class="field" autocomplete="off" placeholder="Why this alert?"
+                [attr.maxlength]="maxComment" [ngModel]="comment()" (ngModelChange)="comment.set($event); error.set(null)" />
+            </label>
+            <div class="flex items-end gap-2">
+              <button type="submit" data-testid="alerts-save" class="btn btn-submit" [disabled]="busy()">Add</button>
+              <button type="button" data-testid="alerts-cancel" class="btn btn-ghost" (click)="closeForm()">Cancel</button>
+            </div>
+            @if (error(); as e) {
+              <p data-testid="alerts-error" class="text-xs text-down md:col-span-5">{{ e }}</p>
+            }
+          }
+        </form>
+      }
+
+      <div class="min-h-0 flex-1 overflow-auto">
+        @if (alerts.alerts().length === 0) {
+          <div class="flex h-full flex-col items-center justify-center gap-2 p-8 text-center text-sm text-muted" data-testid="alerts-empty">
+            <span>No alerts yet.</span>
+            <span>Click <span class="font-bold text-fg">+</span> to watch a stock from your watchlist between a lower and an upper limit.</span>
+          </div>
+        } @else {
+          <table class="w-full text-xs">
+            <thead class="sticky top-0 bg-panel text-[10px] tracking-widest text-muted uppercase">
+              <tr class="border-b border-edge">
+                <th class="px-3 py-2 text-left">Ticker</th>
+                <th class="px-3 py-2 text-right">Price</th>
+                <th class="px-3 py-2 text-right">Lower limit</th>
+                <th class="px-3 py-2 text-right">Upper limit</th>
+                <th class="px-3 py-2 text-left">Status</th>
+                <th class="px-3 py-2 text-left">Comment</th>
+                <th class="px-3 py-2 text-left">Added</th>
+                <th class="w-8 px-3 py-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (a of alerts.alerts(); track a.id) {
+                <tr class="border-b border-edge/60 hover:bg-panel-2" [attr.data-testid]="'alerts-row-' + a.id" [attr.data-status]="status(a)">
+                  <td class="px-3 py-2 font-bold">{{ a.ticker }}</td>
+                  <td class="num px-3 py-2 text-right"><span class="rounded px-1" [appPriceFlash]="livePrice(a)">{{ livePrice(a) | price }}</span></td>
+                  <td class="num px-3 py-2 text-right text-down">{{ a.lowerLimit != null ? (a.lowerLimit | price) : '—' }}</td>
+                  <td class="num px-3 py-2 text-right text-up">{{ a.upperLimit != null ? (a.upperLimit | price) : '—' }}</td>
+                  <td class="px-3 py-2">
+                    <span class="rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wider uppercase" [class]="statusClass(a)">{{ statusLabel(a) }}</span>
+                  </td>
+                  <td class="max-w-80 truncate px-3 py-2 text-muted" [attr.title]="a.comment ?? ''">{{ a.comment || '—' }}</td>
+                  <td class="num px-3 py-2 text-muted">{{ a.createdAt | date: 'dd MMM HH:mm' }}</td>
+                  <td class="px-3 py-2 text-right">
+                    <button type="button" class="text-muted hover:text-down" [attr.data-testid]="'alerts-delete-' + a.id" title="Delete alert" (click)="remove(a)">×</button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </div>
+    </section>
+  `,
+})
+export class AlertsPage implements OnInit {
+  readonly alerts = inject(AlertsService);
+  private readonly watchlist = inject(WatchlistService);
+  private readonly prices = inject(PriceStreamService);
+
+  readonly maxComment = MAX_ALERT_COMMENT;
+  readonly formOpen = signal(false);
+  readonly ticker = signal('');
+  readonly upper = signal('');
+  readonly lower = signal('');
+  readonly comment = signal('');
+  readonly busy = signal(false);
+  readonly error = signal<string | null>(null);
+
+  readonly watchlistTickers = computed(() => this.watchlist.items().map((i) => i.ticker));
+  readonly selectedPrice = computed(() => (this.ticker() ? this.prices.price(this.ticker()) : null));
+
+  ngOnInit(): void {
+    this.alerts.load();
+    if (this.watchlist.items().length === 0) {
+      this.watchlist.load();
+    }
+  }
+
+  toggleForm(): void {
+    if (this.formOpen()) {
+      this.closeForm();
+    } else {
+      this.formOpen.set(true);
+    }
+  }
+
+  closeForm(): void {
+    this.formOpen.set(false);
+    this.ticker.set('');
+    this.upper.set('');
+    this.lower.set('');
+    this.comment.set('');
+    this.error.set(null);
+  }
+
+  save(): void {
+    const body = buildAlert(this.ticker(), this.upper(), this.lower(), this.comment());
+    if (typeof body === 'string') {
+      this.error.set(body);
+      return;
+    }
+    this.busy.set(true);
+    this.alerts.create(body).subscribe({
+      next: () => {
+        this.busy.set(false);
+        this.closeForm();
+      },
+      error: (e) => {
+        this.busy.set(false);
+        this.error.set(errorMessage(e));
+      },
+    });
+  }
+
+  remove(a: PriceAlert): void {
+    this.alerts.remove(a.id).subscribe({ error: () => this.alerts.load() });
+  }
+
+  livePrice(a: PriceAlert): number | null {
+    return this.prices.price(a.ticker) ?? a.currentPrice ?? null;
+  }
+
+  status(a: PriceAlert): AlertStatus {
+    return alertStatus(this.livePrice(a), a.lowerLimit, a.upperLimit);
+  }
+
+  statusLabel(a: PriceAlert): string {
+    return STATUS[this.status(a)].label;
+  }
+
+  statusClass(a: PriceAlert): string {
+    return STATUS[this.status(a)].cls;
+  }
+}

@@ -72,7 +72,7 @@ class MigrationsTest {
     @Order(1)
     void migrationsApplyCleanlyOnEmptyDatabase() throws SQLException {
         assertThat(firstRun.success).isTrue();
-        assertThat(firstRun.migrationsExecuted).isEqualTo(2);
+        assertThat(firstRun.migrationsExecuted).isEqualTo(3);
         assertThat(flyway().validateWithResult().validationSuccessful).isTrue();
 
         List<String> tables = new ArrayList<>();
@@ -87,12 +87,12 @@ class MigrationsTest {
         }
         assertThat(tables).containsExactly(
                 "chat_messages", "kanban_cards", "portfolio_snapshots", "positions",
-                "trades", "users_profile", "watchlist");
+                "price_alerts", "trades", "users_profile", "watchlist");
 
         assertThat(count("SELECT count(*) FROM pg_indexes WHERE indexname IN ("
                 + "'idx_trades_user_executed_at','idx_portfolio_snapshots_user_recorded_at',"
-                + "'idx_chat_messages_user_created_at','idx_kanban_cards_user_column_sort')"))
-                .isEqualTo(4);
+                + "'idx_chat_messages_user_created_at','idx_kanban_cards_user_column_sort','idx_price_alerts_user_created')"))
+                .isEqualTo(5);
     }
 
     @Test
@@ -214,6 +214,18 @@ class MigrationsTest {
                 "INSERT INTO kanban_cards (ticker, column_name, target_price) VALUES ('AAPL', 'SUPPORT', 0)");
         assertCheckViolation(
                 "INSERT INTO kanban_cards (ticker, column_name, target_price) VALUES ('AAPL', 'RESISTANCE', -5)");
+    }
+
+    @Test
+    void priceAlertChecks() throws SQLException {
+        exec("INSERT INTO price_alerts (ticker, upper_limit, lower_limit, comment) VALUES ('AAPL', 200, 150, 'ok')");
+        exec("INSERT INTO price_alerts (ticker, upper_limit) VALUES ('AAPL', 200)");
+        exec("INSERT INTO price_alerts (ticker, lower_limit) VALUES ('AAPL', 150)");
+        assertCheckViolation("INSERT INTO price_alerts (ticker) VALUES ('AAPL')");
+        assertCheckViolation("INSERT INTO price_alerts (ticker, upper_limit, lower_limit) VALUES ('AAPL', 150, 200)");
+        assertCheckViolation("INSERT INTO price_alerts (ticker, upper_limit) VALUES ('AAPL', 0)");
+        assertCheckViolation("INSERT INTO price_alerts (ticker, lower_limit) VALUES ('AAPL', -1)");
+        assertCheckViolation("INSERT INTO price_alerts (ticker, upper_limit, comment) VALUES ('AAPL', 1, repeat('x', 501))");
     }
 
     private static void assertCheckViolation(String sql) {

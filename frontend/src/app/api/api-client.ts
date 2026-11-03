@@ -11,6 +11,8 @@ import {
   KanbanCardUpdate,
   Portfolio,
   PortfolioSnapshot,
+  PriceAlert,
+  PriceAlertCreate,
   TradeRequest,
   TradeResult,
   UserInfo,
@@ -82,5 +84,16 @@ export class ApiClient {
   }
   deleteKanbanCard(id: string): Observable<void> {
     return this.http.delete<void>(`/api/kanban/${encodeURIComponent(id)}`);
+  }
+
+  // alerts
+  getPriceAlerts(): Observable<PriceAlert[]> {
+    return this.http.get<PriceAlert[]>('/api/alerts');
+  }
+  createPriceAlert(body: PriceAlertCreate): Observable<PriceAlert> {
+    return this.http.post<PriceAlert>('/api/alerts', body);
+  }
+  deletePriceAlert(id: string): Observable<void> {
+    return this.http.delete<void>(`/api/alerts/${encodeURIComponent(id)}`);
   }
 }

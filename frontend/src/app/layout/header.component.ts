@@ -105,6 +105,7 @@ export class HeaderComponent {
     { id: 'markets', path: '/markets', label: 'Markets' },
     { id: 'watchlists', path: '/watchlists', label: 'Watchlists' },
     { id: 'portfolio', path: '/portfolio', label: 'Portfolio' },
+    { id: 'alerts', path: '/alerts', label: 'Alerts' },
   ];
 
   readonly total = this.portfolio.total;

@@ -297,6 +297,37 @@ class AppIntegrationTest {
         assertThat(ev.path("createdAt").asText()).endsWith("Z");
     }
 
+    @Test
+    @Order(8)
+    void priceAlertsForWatchlistTickers() throws Exception {
+        Res created = call("POST", "/api/alerts",
+                "{\"ticker\":\"msft\",\"upperLimit\":600,\"lowerLimit\":400.5,\"comment\":\"  earnings week  \"}");
+        assertThat(created.status()).isEqualTo(201);
+        assertThat(created.body().path("ticker").asText()).isEqualTo("MSFT");
+        assertThat(created.body().path("upperLimit").decimalValue()).isEqualByComparingTo("600");
+        assertThat(created.body().path("lowerLimit").decimalValue()).isEqualByComparingTo("400.5");
+        assertThat(created.body().path("comment").asText()).isEqualTo("earnings week");
+        assertThat(created.body().path("currentPrice").isNumber()).isTrue();
+        String id = created.body().path("id").asText();
+
+        assertThat(call("POST", "/api/alerts", "{\"ticker\":\"AAPL\",\"lowerLimit\":150}").status()).isEqualTo(201);
+        // not on the watchlist, no limit, inverted range
+        Res notWatched = call("POST", "/api/alerts", "{\"ticker\":\"ZZZZ\",\"upperLimit\":10}");
+        assertThat(notWatched.status()).isEqualTo(400);
+        assertThat(notWatched.body().path("message").asText()).contains("watchlist");
+        assertThat(call("POST", "/api/alerts", "{\"ticker\":\"AAPL\"}").status()).isEqualTo(400);
+        assertThat(call("POST", "/api/alerts", "{\"ticker\":\"AAPL\",\"upperLimit\":100,\"lowerLimit\":200}").status())
+                .isEqualTo(400);
+
+        Res list = call("GET", "/api/alerts", null);
+        assertThat(list.body()).hasSize(2);
+        assertThat(list.body().get(0).path("ticker").asText()).isEqualTo("MSFT");
+
+        assertThat(call("DELETE", "/api/alerts/" + id, null).status()).isEqualTo(204);
+        assertThat(call("DELETE", "/api/alerts/" + id, null).status()).isEqualTo(404);
+        assertThat(call("GET", "/api/alerts", null).body()).hasSize(1);
+    }
+
     /** Reads SSE lines until {@code wanted} non-empty event lines have been collected (or 10 s pass). */
     private List<String> readSse(String path, int wanted, Runnable afterConnect) throws Exception {
         HttpRequest req = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))

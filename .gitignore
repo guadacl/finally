@@ -226,3 +226,6 @@ playwright-report/
 .classpath
 .settings/
 .factorypath
+
+# Claude Code personal settings (not shared)
+.claude/settings.local.json

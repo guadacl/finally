@@ -9,6 +9,24 @@ export interface ApiError {
   message: string;
 }
 
+/** Alerts page: a watchlist ticker with an upper and/or lower price limit and a comment. */
+export interface PriceAlert {
+  id: string;
+  ticker: string;
+  upperLimit?: number | null;
+  lowerLimit?: number | null;
+  comment?: string | null;
+  currentPrice?: number | null;
+  createdAt: string;
+}
+
+export interface PriceAlertCreate {
+  ticker: string;
+  upperLimit?: number | null;
+  lowerLimit?: number | null;
+  comment?: string | null;
+}
+
 /** `GET /api/me` — the logged-in Keycloak user. */
 export interface UserInfo {
   id: string;

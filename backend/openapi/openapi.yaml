@@ -16,6 +16,7 @@ tags:
   - name: watchlist
   - name: chat
   - name: kanban
+  - name: alerts
 paths:
   /api/health:
     get:
@@ -209,6 +210,57 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/ChatMessage' }
+
+  /api/alerts:
+    get:
+      tags: [alerts]
+      operationId: getPriceAlerts
+      responses:
+        '200':
+          description: The user's price alerts, oldest first, with the live price
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/PriceAlert' }
+    post:
+      tags: [alerts]
+      operationId: createPriceAlert
+      description: Adds an alert for a ticker that is on the user's watchlist. At least one limit is required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PriceAlertCreate' }
+      responses:
+        '201':
+          description: Alert created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PriceAlert' }
+        '400':
+          description: Ticker not on the watchlist, no limit, lower >= upper, non-positive limit or comment too long
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/alerts/{id}:
+    delete:
+      tags: [alerts]
+      operationId: deletePriceAlert
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204':
+          description: Deleted
+        '404':
+          description: Alert not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
 
   /api/kanban:
     get:
@@ -512,6 +564,27 @@ components:
         column: { $ref: '#/components/schemas/KanbanColumn' }
         targetPrice: { type: number, exclusiveMinimum: true, minimum: 0 }
         sortOrder: { type: integer, minimum: 0 }
+
+    PriceAlert:
+      type: object
+      required: [id, ticker, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        ticker: { type: string }
+        upperLimit: { type: number, nullable: true }
+        lowerLimit: { type: number, nullable: true }
+        comment: { type: string, nullable: true }
+        currentPrice: { type: number, nullable: true, description: 'Live price, null until the first price arrives' }
+        createdAt: { type: string, format: date-time }
+
+    PriceAlertCreate:
+      type: object
+      required: [ticker]
+      properties:
+        ticker: { type: string, description: 'Must be on the user''s watchlist' }
+        upperLimit: { type: number, nullable: true, exclusiveMinimum: true, minimum: 0 }
+        lowerLimit: { type: number, nullable: true, exclusiveMinimum: true, minimum: 0 }
+        comment: { type: string, nullable: true, maxLength: 500 }
 
     NotificationType:
       type: string

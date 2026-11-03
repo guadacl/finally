@@ -57,3 +57,5 @@ Specs share the single default user, so they run serially (`workers: 1`) and res
 | `kanban-card-<id>` (+ `data-armed` = `true` \| `false`) | Kanban card |
 | `kanban-card-live-<id>`, `kanban-card-price-<id>`, `kanban-card-error-<id>`, `kanban-card-delete-<id>` | Card live price, editable target, edit error, delete button |
 | `toast`, `toast-close` | Notification pop-up |
+| `nav-alerts`, `alerts-add-button`, `alerts-form`, `alerts-ticker`, `alerts-upper`, `alerts-lower`, `alerts-comment`, `alerts-save`, `alerts-cancel`, `alerts-error`, `alerts-empty` | Alerts page: + button and the add form |
+| `alerts-row-<id>` (with `data-status=above|below|inside|unknown`), `alerts-delete-<id>` | Alert rows |
