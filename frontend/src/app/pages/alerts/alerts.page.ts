@@ -2,7 +2,9 @@ import { DatePipe } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { PriceAlert, errorMessage } from '../../api/models';
+import { COLUMN_LABEL, KanbanColumn, PriceAlert, errorMessage } from '../../api/models';
+import { KanbanService } from '../../core/kanban.service';
+import { ToastService } from '../../core/toast.service';
 import { AlertStatus, AlertsService, MAX_ALERT_COMMENT, alertStatus, buildAlert, liveDayRange } from '../../core/alerts.service';
 import { PriceStreamService } from '../../core/price-stream.service';
 import { WatchlistService } from '../../core/watchlist.service';
@@ -156,6 +158,8 @@ export class AlertsPage implements OnInit {
   private readonly watchlist = inject(WatchlistService);
   private readonly prices = inject(PriceStreamService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly kanban = inject(KanbanService);
+  private readonly toasts = inject(ToastService);
 
   readonly maxComment = MAX_ALERT_COMMENT;
   readonly formOpen = signal(false);
@@ -207,12 +211,36 @@ export class AlertsPage implements OnInit {
       next: () => {
         this.busy.set(false);
         this.closeForm();
+        this.addKanbanCards(body.ticker, body.lowerLimit, body.upperLimit);
       },
       error: (e) => {
         this.busy.set(false);
         this.error.set(errorMessage(e));
       },
     });
+  }
+
+  /**
+   * Mirror a new alert on the kanban board: the lower limit becomes a Support card, the upper
+   * limit a Resistance card (only the limits that were set). The alert is already saved, so a
+   * card failure is reported as a toast instead of blocking the form.
+   */
+  private addKanbanCards(ticker: string, lower: number | null | undefined, upper: number | null | undefined): void {
+    const cards: [KanbanColumn, number][] = [];
+    if (lower != null) cards.push(['SUPPORT', lower]);
+    if (upper != null) cards.push(['RESISTANCE', upper]);
+    for (const [column, target] of cards) {
+      this.kanban.create(ticker, column, target).subscribe({
+        error: (e) =>
+          this.toasts.show({
+            type: 'ERROR',
+            ticker,
+            column,
+            targetPrice: target,
+            message: `Alert saved, but the ${COLUMN_LABEL[column]} card could not be created: ${errorMessage(e)}`,
+          }),
+      });
+    }
   }
 
   remove(a: PriceAlert): void {
