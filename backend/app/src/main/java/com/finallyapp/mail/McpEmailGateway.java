@@ -38,6 +38,7 @@ public class McpEmailGateway implements EmailGateway {
     private final String endpoint;
     private final Duration timeout;
 
+    @org.springframework.beans.factory.annotation.Autowired // two constructors: tell Spring which one to use
     public McpEmailGateway(FinallyProperties props) {
         this(props.mail().mcpUrl(), props.mail().timeout());
     }
