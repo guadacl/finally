@@ -3,6 +3,7 @@
   "displayName": "FinAlly",
   "displayNameHtml": "<span style=\"font-weight:700\">Fin<span style=\"color:#ecad0a\">Ally</span></span>",
   "enabled": true,
+  "loginTheme": "finally",
   "sslRequired": "external",
   "registrationAllowed": true,
   "registrationEmailAsUsername": false,

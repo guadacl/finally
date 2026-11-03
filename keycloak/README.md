@@ -36,6 +36,22 @@ keycloak-26.8.1/bin/kc.sh start-dev --http-port 8180 --import-realm
 - The realm file uses placeholders: `${KEYCLOAK_CLIENT_SECRET:finally-dev-secret}` and `${APP_PORT:8000}` (redirect URIs).
   Changing them later needs a fresh import (`docker compose down` + `docker volume rm finally-keycloak`) or the admin console.
 
+## Custom login page (theme `finally`)
+
+The login, registration, password-reset and social first-login pages use the **FinAlly login theme** in
+`themes/finally/login/`: Keycloak's classic login pages restyled in the trading-terminal look (dark grid background,
+yellow "F" logo, purple submit button, white Google / blue Facebook buttons under "or continue with").
+
+- Only CSS (`resources/css/finally.css`) and texts (`messages/messages_en.properties`) are customised; the page
+  templates are Keycloak's own, so every login feature (errors, remember me, reset password, OTP, account linking)
+  keeps working after Keycloak upgrades.
+- The Google / Facebook buttons appear automatically for each **enabled** identity provider (see below).
+- Wiring: `compose.keycloak.yml` mounts `./themes/finally` at `/opt/keycloak/themes/finally`, and the realm sets
+  `"loginTheme": "finally"`. `start-dev` disables theme caching: edit the CSS and reload the page.
+- Existing realm (imported before the theme existed): Admin console → Realm settings → Themes → Login theme →
+  `finally`, or `kcadm.sh update realms/finally -s loginTheme=finally`.
+- Revert to Keycloak's default page: set the login theme back to empty (`-s loginTheme=`).
+
 ## Social login (Google / Facebook)
 
 The realm has two identity providers, `google` and `facebook` (Keycloak Identity Brokering). Each one is
