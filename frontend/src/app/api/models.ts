@@ -168,6 +168,7 @@ export interface ChatMessage {
 }
 
 export type KanbanColumn = 'SUPPORT' | 'RESISTANCE';
+export type KanbanCardStatus = 'ACTIVE' | 'NOTIFIED';
 export const KANBAN_COLUMNS: readonly KanbanColumn[] = ['SUPPORT', 'RESISTANCE'];
 
 /**
@@ -185,8 +186,10 @@ export interface KanbanCard {
   column: KanbanColumn;
   targetPrice: number;
   sortOrder: number;
-  /** false after an alert fired, until the price crosses back */
+  /** false once the alert fired (NOTIFIED); true again only after the target is edited or the card is moved */
   armed: boolean;
+  /** ACTIVE until the target is first reached, then NOTIFIED (alert sent once). Mirrors the Camunda process. */
+  status?: KanbanCardStatus;
   currentPrice?: number | null;
   /** Free-text note, editable on the card. */
   comment?: string | null;

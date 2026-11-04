@@ -536,6 +536,11 @@ components:
       type: string
       enum: [SUPPORT, RESISTANCE]
 
+    KanbanCardStatus:
+      type: string
+      enum: [ACTIVE, NOTIFIED]
+      description: 'ACTIVE until the target price is first reached, then NOTIFIED (the alert was sent once and will not repeat). Editing the target or moving the card makes it ACTIVE again. Mirrors the Camunda process variable `status`.'
+
     KanbanCard:
       type: object
       required: [id, ticker, column, targetPrice, sortOrder, armed, createdAt, updatedAt]
@@ -545,7 +550,8 @@ components:
         column: { $ref: '#/components/schemas/KanbanColumn' }
         targetPrice: { type: number }
         sortOrder: { type: integer }
-        armed: { type: boolean, description: 'false after an alert fired, until the price crosses back' }
+        armed: { type: boolean, description: 'false once the alert fired (status NOTIFIED); true again only after the target is edited or the card is moved' }
+        status: { $ref: '#/components/schemas/KanbanCardStatus' }
         currentPrice: { type: number, nullable: true }
         comment: { type: string, nullable: true, description: 'Free-text note, editable on the board' }
         createdAt: { type: string, format: date-time }

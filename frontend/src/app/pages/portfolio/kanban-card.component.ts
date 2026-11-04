@@ -32,7 +32,7 @@ import { PriceFlashDirective } from '../../shared/price-flash.directive';
       <span
         class="ml-1"
         [class]="card().armed ? 'text-accent' : 'text-muted/50'"
-        [attr.title]="card().armed ? 'Alert armed' : 'Alert fired — re-arms when price crosses back'"
+        [attr.title]="card().armed ? 'Alert active: notifies once when the target is reached' : 'Notified — edit the target or move the card to re-arm'"
         [attr.data-testid]="'kanban-card-armed-' + card().id"
       >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -42,6 +42,13 @@ import { PriceFlashDirective } from '../../shared/price-flash.directive';
           }
         </svg>
       </span>
+      @if (!card().armed) {
+        <span
+          class="rounded border border-accent/60 bg-accent/10 px-1.5 py-px text-[9px] font-semibold tracking-widest text-accent uppercase"
+          [attr.data-testid]="'kanban-card-status-' + card().id"
+          title="Target reached: the notification was sent once. Edit the target or move the card to re-arm."
+        >Notified</span>
+      }
       <button
         type="button"
         class="ml-auto cursor-pointer px-1 text-base leading-none text-muted hover:text-down"

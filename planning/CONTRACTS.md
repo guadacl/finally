@@ -107,7 +107,7 @@ kanban_cards(
   column_name           TEXT NOT NULL CHECK (column_name IN ('SUPPORT','RESISTANCE')),
   target_price          NUMERIC(18,4) NOT NULL CHECK (target_price > 0),
   sort_order            INTEGER NOT NULL DEFAULT 0,
-  armed                 BOOLEAN NOT NULL DEFAULT TRUE,   -- alert re-arm state
+  armed                 BOOLEAN NOT NULL DEFAULT TRUE,   -- true = ACTIVE, false = NOTIFIED (alert sent once)
   process_instance_key  BIGINT NULL,                     -- Camunda process instance
   created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at            TIMESTAMPTZ NOT NULL DEFAULT now())
@@ -145,7 +145,8 @@ Persistence mapping (`backend/app/src/main/java/com/finallyapp/persistence`): on
 - **Board display (frontend only)**: DIST = `(targetPrice − livePrice) / livePrice × 100` (`cardDistance`). Each column is ordered by |DIST| ascending (`sortByDistance`; cards without a price last, ties keep `sortOrder`) and re-sorts as prices stream; within-column drag reordering is disabled, drag between columns still PATCHes `column`. A RESISTANCE card with `targetPrice < livePrice` gets `data-broken="true"` and the accent-yellow highlight. Saving one inline field (target or comment) never resets the other field being typed.
 - A card is `(ticker, column ∈ {SUPPORT, RESISTANCE}, targetPrice)`. One ticker may have several cards. The ticker does not need to be on the watchlist; creating a card adds the ticker to the price source so it gets live prices (same mechanism as watchlist add).
 - Alert trigger: SUPPORT fires when `price <= target`; RESISTANCE fires when `price >= target`.
-- Fire only when `armed = true`; then set `armed = false`. Re-arm (`armed = true`) when the condition becomes false again, when the target price is edited, or when the card moves column.
+- **Notify once**: fire only when `armed = true`; then set `armed = false` = status **NOTIFIED** (API `KanbanCard.status`: `ACTIVE` | `NOTIFIED`, derived from `armed`). A NOTIFIED card does **not** re-arm when the price moves back and crosses again; it re-arms (`armed = true`, status `ACTIVE`) only when the user edits the target price or moves the card to the other column. A comment edit does not re-arm.
+- **Camunda mirror**: process variable `status` (`"ACTIVE"` at instance start and in every `card-moved` message). The target-hit event subprocess first evaluates `Gateway_AlreadyNotified` (`=is defined(status) and status = "NOTIFIED"` → `EndEvent_DuplicateIgnored`, no notification); otherwise the script task `Task_SetStatusNotified` sets `status = "NOTIFIED"` **before** the toast, email and SMS run. The card-moved subprocess runs `Task_SetStatusActive` (`status = "ACTIVE"`) first. So even a duplicate `target-price-hit` message never notifies twice.
 - The **Backend** evaluates alerts on each price update (in memory, persisting `armed` changes) and calls `KanbanWorkflow.targetPriceHit(...)`.
 - The DB is the source of truth for a card's column; Camunda mirrors it in the process variable `column`.
 - **Emails** (toasts unchanged): the card owner is emailed at `users_profile.email` for **`CARD_CREATED`, `CARD_DELETED` and `TARGET_HIT`** — never `CARD_MOVED` (`NotificationEmailer.EMAILED`).

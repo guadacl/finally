@@ -129,7 +129,7 @@ public class AlertEngine implements PriceListener {
             if (d == Decision.NONE) {
                 return d;
             }
-            card.armed = d == Decision.REARM;
+            card.armed = false; // NOTIFIED: no further alerts until the user edits or moves the card
             ref = new KanbanCardRef(card.id, card.ticker, card.column, card.target, card.userId);
         }
         dispatcher.execute(() -> {

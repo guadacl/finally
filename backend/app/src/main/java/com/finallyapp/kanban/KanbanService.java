@@ -171,6 +171,7 @@ public class KanbanService {
                 r.targetPrice().stripTrailingZeros(), r.sortOrder(), r.armed(), r.createdAt(), r.updatedAt());
         c.setCurrentPrice(cache.price(r.ticker()));
         c.setComment(r.comment());
+        c.setStatus(com.finallyapp.api.model.KanbanCardStatus.fromValue(AlertRules.status(r.armed()).name()));
         return c;
     }
 }
