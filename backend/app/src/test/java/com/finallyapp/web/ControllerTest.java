@@ -43,7 +43,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.simple.JdbcClient;
+import com.finallyapp.persistence.UserProfileRepository;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -65,8 +65,8 @@ class ControllerTest {
     KanbanService kanban;
     @MockitoBean
     ChatService chat;
-    @MockitoBean(answers = org.mockito.Answers.RETURNS_DEEP_STUBS)
-    JdbcClient jdbc;
+    @MockitoBean
+    UserProfileRepository profiles;
     @MockitoBean
     MarketDataSource source;
 
@@ -219,7 +219,7 @@ class ControllerTest {
 
     @Test
     void health() throws Exception {
-        when(jdbc.sql(anyString()).query(Integer.class).single()).thenReturn(1);
+        when(profiles.ping()).thenReturn(1);
         when(source.name()).thenReturn("simulator");
         mvc.perform(get("/api/health"))
                 .andExpect(status().isOk())

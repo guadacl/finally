@@ -1,12 +1,13 @@
 package com.finallyapp.security;
 
 import com.finallyapp.market.TickerTracker;
+import com.finallyapp.persistence.UserProfileRepository;
+import com.finallyapp.persistence.WatchlistRepository;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -22,13 +23,16 @@ public class UserProvisioning {
     public static final List<String> DEFAULT_WATCHLIST =
             List.of("AAPL", "GOOGL", "MSFT", "AMZN", "TSLA", "NVDA", "META", "JPM", "V", "NFLX");
 
-    private final JdbcClient jdbc;
+    private final UserProfileRepository profiles;
+    private final WatchlistRepository watchlist;
     private final TransactionTemplate tx;
     private final TickerTracker tracker;
     private final Set<String> provisioned = ConcurrentHashMap.newKeySet();
 
-    public UserProvisioning(JdbcClient jdbc, TransactionTemplate tx, TickerTracker tracker) {
-        this.jdbc = jdbc;
+    public UserProvisioning(UserProfileRepository profiles, WatchlistRepository watchlist, TransactionTemplate tx,
+                            TickerTracker tracker) {
+        this.profiles = profiles;
+        this.watchlist = watchlist;
         this.tx = tx;
         this.tracker = tracker;
     }
@@ -38,16 +42,12 @@ public class UserProvisioning {
         if (userId == null || userId.isBlank() || provisioned.contains(userId)) {
             return;
         }
+        // Race-free on purpose: the browser sends several requests at a user's first login.
         Boolean created = tx.execute(status -> {
-            int inserted = jdbc.sql("INSERT INTO users_profile (id) VALUES (:u) ON CONFLICT (id) DO NOTHING")
-                    .param("u", userId).update();
-            if (inserted == 0) {
+            if (profiles.insertIfMissing(userId) == 0) {
                 return false;
             }
-            for (String ticker : DEFAULT_WATCHLIST) {
-                jdbc.sql("INSERT INTO watchlist (user_id, ticker) VALUES (:u, :t) ON CONFLICT (user_id, ticker) DO NOTHING")
-                        .param("u", userId).param("t", ticker).update();
-            }
+            DEFAULT_WATCHLIST.forEach(ticker -> watchlist.insertIfMissing(userId, ticker));
             return true;
         });
         if (Boolean.TRUE.equals(created)) {

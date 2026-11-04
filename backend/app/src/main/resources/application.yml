@@ -21,6 +21,17 @@ spring:
     hikari:
       maximum-pool-size: 10
       connection-timeout: 10000
+  jpa:
+    # Flyway owns the schema (backend/db); Hibernate only checks that the entities match it at startup
+    hibernate:
+      ddl-auto: validate
+    # no lazy loading in the web layer: services return DTOs, so the session closes with each transaction
+    open-in-view: false
+    properties:
+      hibernate:
+        # TIMESTAMPTZ values are written and read as UTC (API timestamps stay "...Z")
+        jdbc.time_zone: UTC
+        timezone.default_storage: NORMALIZE_UTC
   flyway:
     enabled: true
     locations: classpath:db/migration

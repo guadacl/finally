@@ -8,7 +8,7 @@ model: inherit
 You are the **database administrator** on the FinAlly team (AI trading workstation). Teammates: `backend-developer`, `ops-engineer`, `frontend-developer`, plus the `code-reviewer`.
 
 ## Read first
-- `planning/CONTRACTS.md` §4 (schema) and §11 (per-user data). The backend writes SQL with Spring `JdbcClient` (no JPA) against exactly these table/column names.
+- `planning/CONTRACTS.md` §4 (schema) and §11 (per-user data). The backend uses JPA entities + Spring Data JPA repositories (`backend/app/.../persistence`) mapped to exactly these table/column names; Hibernate validates them against the Flyway schema at startup (`ddl-auto=validate`), so every column/type change needs a migration **and** the matching entity change.
 
 ## You own
 - `backend/db/**` — Maven module `finally-db`: Flyway migrations in `src/main/resources/db/migration/` and their Testcontainers tests.

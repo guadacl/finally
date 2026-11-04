@@ -10,15 +10,15 @@ import com.finallyapp.market.DayRangeCache;
 import com.finallyapp.market.LastSessionVolumes;
 import com.finallyapp.market.PriceCache;
 import com.finallyapp.market.TickerTracker;
+import com.finallyapp.persistence.PriceAlertEntity;
+import com.finallyapp.persistence.PriceAlertRepository;
+import com.finallyapp.persistence.WatchlistRepository;
 import com.finallyapp.security.CurrentUser;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
-import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 
 /**
@@ -30,7 +30,6 @@ public class PriceAlertService {
 
     static final int MAX_COMMENT = 500;
     private static final BigDecimal MAX_PRICE = new BigDecimal("100000000000000");
-    private static final String COLS = "id, ticker, upper_limit, lower_limit, comment, created_at";
 
     /** Validated input, ready to store. */
     record NewAlert(String ticker, BigDecimal upper, BigDecimal lower, String comment) {
@@ -40,16 +39,19 @@ public class PriceAlertService {
                        OffsetDateTime createdAt) {
     }
 
-    private final JdbcClient jdbc;
+    private final PriceAlertRepository alerts;
+    private final WatchlistRepository watchlist;
     private final PriceCache cache;
     private final TickerTracker tracker;
     private final DayRangeCache dayRanges;
     private final LastSessionVolumes volumes;
     private final DailyCloses dailyCloses;
 
-    public PriceAlertService(JdbcClient jdbc, PriceCache cache, TickerTracker tracker, DayRangeCache dayRanges,
-                             LastSessionVolumes volumes, DailyCloses dailyCloses) {
-        this.jdbc = jdbc;
+    public PriceAlertService(PriceAlertRepository alerts, WatchlistRepository watchlist, PriceCache cache,
+                             TickerTracker tracker, DayRangeCache dayRanges, LastSessionVolumes volumes,
+                             DailyCloses dailyCloses) {
+        this.alerts = alerts;
+        this.watchlist = watchlist;
         this.cache = cache;
         this.tracker = tracker;
         this.dayRanges = dayRanges;
@@ -58,40 +60,28 @@ public class PriceAlertService {
     }
 
     public List<PriceAlert> list() {
-        return jdbc.sql("SELECT " + COLS + " FROM price_alerts WHERE user_id = :u ORDER BY created_at, id")
-                .param("u", CurrentUser.id())
-                .query(PriceAlertService::map).list()
-                .stream().map(this::toDto).toList();
+        return alerts.findByUserIdOrderByCreatedAtAscIdAsc(CurrentUser.id()).stream()
+                .map(PriceAlertService::row).map(this::toDto).toList();
     }
 
     /** 400 when the ticker is not on the user's watchlist or the limits/comment are invalid. */
     public PriceAlert create(PriceAlertCreate req) {
         NewAlert a = validate(req);
         String user = CurrentUser.id();
-        boolean onWatchlist = jdbc.sql("SELECT count(*) FROM watchlist WHERE user_id = :u AND ticker = :t")
-                .param("u", user).param("t", a.ticker()).query(Integer.class).single() > 0;
-        if (!onWatchlist) {
+        if (!watchlist.existsByUserIdAndTicker(user, a.ticker())) {
             throw ApiException.badRequest(ErrorCodes.INVALID_TICKER,
                     a.ticker() + " is not on your watchlist - add it there first");
         }
-        Row row = jdbc.sql("""
-                        INSERT INTO price_alerts (user_id, ticker, upper_limit, lower_limit, comment)
-                        VALUES (:u, :t, :up, :lo, :c)
-                        RETURNING\s""" + COLS)
-                .param("u", user).param("t", a.ticker())
-                .param("up", a.upper(), java.sql.Types.NUMERIC).param("lo", a.lower(), java.sql.Types.NUMERIC)
-                .param("c", a.comment(), java.sql.Types.VARCHAR)
-                .query(PriceAlertService::map).single();
+        Row row = row(alerts.save(new PriceAlertEntity(user, a.ticker(), a.upper(), a.lower(), a.comment())));
         tracker.track(row.ticker());
         return toDto(row);
     }
 
     public void delete(UUID id) {
-        String ticker = jdbc.sql("DELETE FROM price_alerts WHERE user_id = :u AND id = :id RETURNING ticker")
-                .param("u", CurrentUser.id()).param("id", id)
-                .query(String.class).optional()
+        PriceAlertEntity alert = alerts.findByIdAndUserId(id, CurrentUser.id())
                 .orElseThrow(() -> ApiException.notFound(ErrorCodes.NOT_FOUND, "Alert " + id + " not found"));
-        tracker.untrackIfUnused(ticker);
+        alerts.delete(alert);
+        tracker.untrackIfUnused(alert.getTicker());
     }
 
     /** Normalizes and checks the request: ticker format, at least one positive limit, lower < upper, comment length. */
@@ -151,8 +141,7 @@ public class PriceAlertService {
         return v == null ? null : v.stripTrailingZeros();
     }
 
-    private static Row map(ResultSet rs, int i) throws SQLException {
-        return new Row(rs.getObject(1, UUID.class), rs.getString(2), rs.getBigDecimal(3), rs.getBigDecimal(4),
-                rs.getString(5), rs.getObject(6, OffsetDateTime.class));
+    private static Row row(PriceAlertEntity e) {
+        return new Row(e.getId(), e.getTicker(), e.getUpperLimit(), e.getLowerLimit(), e.getComment(), e.getCreatedAt());
     }
 }

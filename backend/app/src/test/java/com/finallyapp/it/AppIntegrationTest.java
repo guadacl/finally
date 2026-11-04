@@ -48,7 +48,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.jdbc.core.simple.JdbcClient;
+import com.finallyapp.persistence.KanbanCardRepository;
+import com.finallyapp.persistence.PositionRepository;
+import com.finallyapp.persistence.TradeRepository;
+import com.finallyapp.persistence.UserProfileRepository;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -82,7 +85,13 @@ class AppIntegrationTest {
     @Autowired
     ObjectMapper mapper;
     @Autowired
-    JdbcClient jdbc;
+    PositionRepository positionRepo;
+    @Autowired
+    TradeRepository tradeRepo;
+    @Autowired
+    KanbanCardRepository cardRepo;
+    @Autowired
+    UserProfileRepository profileRepo;
     @Autowired
     PriceCache cache;
     @Autowired
@@ -196,8 +205,8 @@ class AppIntegrationTest {
         Res sell = call("POST", "/api/portfolio/trade", "{\"ticker\":\"AAPL\",\"quantity\":2.5,\"side\":\"sell\"}");
         assertThat(sell.status()).isEqualTo(200);
         assertThat(sell.body().path("portfolio").path("positions")).isEmpty();
-        assertThat(jdbc.sql("SELECT count(*) FROM positions").query(Integer.class).single()).isZero();
-        assertThat(jdbc.sql("SELECT count(*) FROM trades").query(Integer.class).single()).isEqualTo(2);
+        assertThat(positionRepo.count()).isZero();
+        assertThat(tradeRepo.count()).isEqualTo(2L);
 
         Res hist = call("GET", "/api/portfolio/history", null);
         assertThat(hist.body().size()).isGreaterThanOrEqualTo(2);
@@ -215,8 +224,7 @@ class AppIntegrationTest {
         assertThat(created.body().path("armed").asBoolean()).isTrue();
         assertThat(created.body().path("currentPrice").isNumber()).isTrue();
         verify(workflow).cardCreated(eq(new KanbanCardRef(id, "MSFT", KanbanColumn.RESISTANCE, new BigDecimal("100000.0000"), "default")));
-        assertThat(jdbc.sql("SELECT process_instance_key FROM kanban_cards WHERE id = :id").param("id", id)
-                .query(Long.class).single()).isEqualTo(4242L);
+        assertThat(cardRepo.findById(id).orElseThrow().getProcessInstanceKey()).isEqualTo(4242L);
 
         // Move to SUPPORT with the same huge target: price is below -> fires on the next tick.
         Res moved = call("PATCH", "/api/kanban/" + id, "{\"column\":\"SUPPORT\"}");
@@ -227,7 +235,7 @@ class AppIntegrationTest {
         long deadline = System.currentTimeMillis() + 5000;
         boolean armed = true;
         while (System.currentTimeMillis() < deadline && armed) {
-            armed = jdbc.sql("SELECT armed FROM kanban_cards WHERE id = :id").param("id", id).query(Boolean.class).single();
+            armed = cardRepo.findById(id).orElseThrow().isArmed();
             Thread.sleep(100);
         }
         assertThat(armed).isFalse();
@@ -380,9 +388,9 @@ class AppIntegrationTest {
         // V5 / V6 migrations: users_profile.email / phone; stored the way the login filter does it
         userContacts.rememberEmail("default", "demo@finally.local");
         userContacts.rememberPhone("default", "+32 470 12 34 56");
-        assertThat(jdbc.sql("SELECT email FROM users_profile WHERE id = 'default'").query(String.class).single())
+        assertThat(profileRepo.findById("default").orElseThrow().getEmail())
                 .isEqualTo("demo@finally.local");
-        assertThat(jdbc.sql("SELECT phone FROM users_profile WHERE id = 'default'").query(String.class).single())
+        assertThat(profileRepo.findById("default").orElseThrow().getPhone())
                 .isEqualTo("+32470123456");
         assertThat(userContacts.email("nobody")).isEmpty();
         // invalid numbers are ignored, a missing claim clears the number

@@ -18,15 +18,18 @@ import com.finallyapp.config.FinallyProperties;
 import com.finallyapp.error.ApiException;
 import com.finallyapp.error.ErrorCodes;
 import com.finallyapp.portfolio.PortfolioService;
+import com.finallyapp.persistence.ChatMessageEntity;
+import com.finallyapp.persistence.ChatMessageRepository;
 import com.finallyapp.watchlist.WatchlistService;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
-import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 /** AI chat: prompt with portfolio context + history, call the LLM, auto-execute its actions, persist. */
@@ -50,17 +53,17 @@ public class ChatService {
     private final LlmResponseParser parser;
     private final PortfolioService portfolio;
     private final WatchlistService watchlist;
-    private final JdbcClient jdbc;
+    private final ChatMessageRepository messages;
     private final ObjectMapper mapper;
     private final int historyLimit;
 
     public ChatService(LlmClient llm, LlmResponseParser parser, PortfolioService portfolio, WatchlistService watchlist,
-                       JdbcClient jdbc, ObjectMapper mapper, FinallyProperties props) {
+                       ChatMessageRepository messages, ObjectMapper mapper, FinallyProperties props) {
         this.llm = llm;
         this.parser = parser;
         this.portfolio = portfolio;
         this.watchlist = watchlist;
-        this.jdbc = jdbc;
+        this.messages = messages;
         this.mapper = mapper;
         this.historyLimit = props.llm().historyLimit();
     }
@@ -193,38 +196,28 @@ public class ChatService {
                 log.warn("Could not serialize chat actions: {}", e.toString());
             }
         }
-        return jdbc.sql("""
-                        INSERT INTO chat_messages (user_id, role, content, actions)
-                        VALUES (:u, :r, :c, CAST(:a AS jsonb))
-                        RETURNING id, created_at
-                        """)
-                .param("u", CurrentUser.id()).param("r", role).param("c", content).param("a", json, java.sql.Types.VARCHAR)
-                .query((rs, i) -> new Saved(rs.getObject(1, UUID.class), rs.getObject(2, OffsetDateTime.class)))
-                .single();
+        ChatMessageEntity saved = messages.save(new ChatMessageEntity(CurrentUser.id(), role, content, json));
+        return new Saved(saved.getId(), saved.getCreatedAt());
     }
 
-    /** Most recent {@code limit} messages, oldest first. */
+    /** Most recent {@code limit} messages, oldest first ("user" before "assistant" at the same instant). */
     List<ChatMessage> recent(int limit) {
-        return jdbc.sql("""
-                        SELECT id, role, content, actions::text, created_at FROM (
-                          SELECT id, role, content, actions, created_at FROM chat_messages
-                          WHERE user_id = :u ORDER BY created_at DESC, role DESC LIMIT :n
-                        ) m ORDER BY created_at ASC, role DESC
-                        """)
-                .param("u", CurrentUser.id()).param("n", limit)
-                .query((rs, i) -> {
-                    ChatMessage m = new ChatMessage(rs.getObject(1, UUID.class), ChatRole.fromValue(rs.getString(2)),
-                            rs.getString(3), rs.getObject(5, OffsetDateTime.class));
-                    String a = rs.getString(4);
-                    if (a != null) {
-                        try {
-                            m.setActions(mapper.readValue(a, ChatActions.class));
-                        } catch (Exception e) {
-                            log.debug("Unreadable actions JSON on message {}", m.getId());
-                        }
-                    }
-                    return m;
-                })
-                .list();
+        return messages.findByUserIdOrderByCreatedAtDescRoleDesc(CurrentUser.id(), PageRequest.of(0, limit)).stream()
+                .sorted(Comparator.comparing(ChatMessageEntity::getCreatedAt)
+                        .thenComparing(ChatMessageEntity::getRole, Comparator.reverseOrder()))
+                .map(this::toMessage)
+                .toList();
+    }
+
+    private ChatMessage toMessage(ChatMessageEntity e) {
+        ChatMessage m = new ChatMessage(e.getId(), ChatRole.fromValue(e.getRole()), e.getContent(), e.getCreatedAt());
+        if (e.getActions() != null) {
+            try {
+                m.setActions(mapper.readValue(e.getActions(), ChatActions.class));
+            } catch (Exception ex) {
+                log.debug("Unreadable actions JSON on message {}", m.getId());
+            }
+        }
+        return m;
     }
 }
