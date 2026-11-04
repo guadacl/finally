@@ -1,18 +1,32 @@
 package com.finallyapp.portfolio;
 
-import com.finallyapp.security.CurrentUser;
+import com.finallyapp.persistence.PortfolioSnapshotEntity;
+import com.finallyapp.persistence.PortfolioSnapshotRepository;
+import com.finallyapp.persistence.PositionEntity;
+import com.finallyapp.persistence.PositionRepository;
+import com.finallyapp.persistence.TradeEntity;
+import com.finallyapp.persistence.TradeRepository;
+import com.finallyapp.persistence.UserProfileEntity;
+import com.finallyapp.persistence.UserProfileRepository;
 import com.finallyapp.portfolio.PortfolioMath.Holding;
+import com.finallyapp.security.CurrentUser;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
+/**
+ * The current user's cash, positions, trades and portfolio snapshots, on top of the Spring Data JPA repositories.
+ * Methods that change several rows ({@link #lockCash()}, {@link #setCash}, {@link #saveHolding}) are meant to run
+ * inside the trade transaction of {@link PortfolioService}.
+ */
 @Repository
 public class PortfolioRepository {
-
 
     public record PositionRow(String ticker, BigDecimal quantity, BigDecimal avgCost, OffsetDateTime updatedAt) {
     }
@@ -24,10 +38,17 @@ public class PortfolioRepository {
     public record SnapshotRow(BigDecimal totalValue, OffsetDateTime recordedAt) {
     }
 
-    private final JdbcClient jdbc;
+    private final UserProfileRepository profiles;
+    private final PositionRepository positions;
+    private final TradeRepository trades;
+    private final PortfolioSnapshotRepository snapshots;
 
-    public PortfolioRepository(JdbcClient jdbc) {
-        this.jdbc = jdbc;
+    public PortfolioRepository(UserProfileRepository profiles, PositionRepository positions, TradeRepository trades,
+                               PortfolioSnapshotRepository snapshots) {
+        this.profiles = profiles;
+        this.positions = positions;
+        this.trades = trades;
+        this.snapshots = snapshots;
     }
 
     /**
@@ -35,91 +56,78 @@ public class PortfolioRepository {
      * (nobody can log in as it, so its portfolio no longer changes).
      */
     public List<String> userIds() {
-        List<String> all = jdbc.sql("SELECT id FROM users_profile ORDER BY created_at").query(String.class).list();
+        List<String> all = profiles.findAllIdsOrderByCreatedAt();
         return !CurrentUser.isAuthEnabled() ? all
                 : all.stream().filter(id -> !CurrentUser.LEGACY_USER.equals(id)).toList();
     }
 
     public BigDecimal cash() {
-        ensureProfile();
-        return jdbc.sql("SELECT cash_balance FROM users_profile WHERE id = :u")
-                .param("u", CurrentUser.id()).query(BigDecimal.class).single();
+        return profile().getCashBalance();
     }
 
     /** Reads the cash balance with a row lock (call inside a transaction). */
     public BigDecimal lockCash() {
-        ensureProfile();
-        return jdbc.sql("SELECT cash_balance FROM users_profile WHERE id = :u FOR UPDATE")
-                .param("u", CurrentUser.id()).query(BigDecimal.class).single();
+        String user = CurrentUser.id();
+        profiles.insertIfMissing(user);
+        return profiles.findForUpdate(user).orElseThrow().getCashBalance();
     }
 
+    /** Sets the cash balance (inside the trade transaction the locked profile is updated at commit). */
     public void setCash(BigDecimal cash) {
-        jdbc.sql("UPDATE users_profile SET cash_balance = :c WHERE id = :u")
-                .param("c", cash).param("u", CurrentUser.id()).update();
+        UserProfileEntity p = profile();
+        p.setCashBalance(cash);
+        profiles.save(p);
     }
 
-    private void ensureProfile() {
-        jdbc.sql("INSERT INTO users_profile (id) VALUES (:u) ON CONFLICT (id) DO NOTHING").param("u", CurrentUser.id()).update();
+    private UserProfileEntity profile() {
+        String user = CurrentUser.id();
+        return profiles.findById(user).orElseGet(() -> {
+            profiles.insertIfMissing(user);
+            return profiles.findById(user).orElseThrow();
+        });
     }
 
     public List<PositionRow> positions() {
-        return jdbc.sql("SELECT ticker, quantity, avg_cost, updated_at FROM positions WHERE user_id = :u ORDER BY ticker")
-                .param("u", CurrentUser.id())
-                .query((rs, i) -> new PositionRow(rs.getString(1), rs.getBigDecimal(2), rs.getBigDecimal(3),
-                        rs.getObject(4, OffsetDateTime.class)))
-                .list();
+        return positions.findByUserIdOrderByTickerAsc(CurrentUser.id()).stream()
+                .map(p -> new PositionRow(p.getTicker(), p.getQuantity(), p.getAvgCost(), p.getUpdatedAt()))
+                .toList();
     }
 
     public Optional<Holding> holding(String ticker) {
-        return jdbc.sql("SELECT quantity, avg_cost FROM positions WHERE user_id = :u AND ticker = :t")
-                .param("u", CurrentUser.id()).param("t", ticker)
-                .query((rs, i) -> new Holding(rs.getBigDecimal(1), rs.getBigDecimal(2)))
-                .optional();
+        return positions.findByUserIdAndTicker(CurrentUser.id(), ticker)
+                .map(p -> new Holding(p.getQuantity(), p.getAvgCost()));
     }
 
+    /** Creates, updates or (when {@code h} is null, i.e. fully sold) deletes the position. */
     public void saveHolding(String ticker, Holding h) {
+        String user = CurrentUser.id();
         if (h == null) {
-            jdbc.sql("DELETE FROM positions WHERE user_id = :u AND ticker = :t")
-                    .param("u", CurrentUser.id()).param("t", ticker).update();
+            positions.deleteByUserIdAndTicker(user, ticker);
             return;
         }
-        jdbc.sql("""
-                        INSERT INTO positions (user_id, ticker, quantity, avg_cost, updated_at)
-                        VALUES (:u, :t, :q, :a, now())
-                        ON CONFLICT (user_id, ticker)
-                        DO UPDATE SET quantity = EXCLUDED.quantity, avg_cost = EXCLUDED.avg_cost, updated_at = now()
-                        """)
-                .param("u", CurrentUser.id()).param("t", ticker).param("q", h.quantity()).param("a", h.avgCost())
-                .update();
+        PositionEntity p = positions.findByUserIdAndTicker(user, ticker)
+                .orElseGet(() -> new PositionEntity(user, ticker));
+        p.setQuantity(h.quantity());
+        p.setAvgCost(h.avgCost());
+        positions.save(p);
     }
 
     public TradeRow insertTrade(String ticker, String side, BigDecimal qty, BigDecimal price) {
-        return jdbc.sql("""
-                        INSERT INTO trades (user_id, ticker, side, quantity, price)
-                        VALUES (:u, :t, :s, :q, :p)
-                        RETURNING id, ticker, side, quantity, price, executed_at
-                        """)
-                .param("u", CurrentUser.id()).param("t", ticker).param("s", side).param("q", qty).param("p", price)
-                .query((rs, i) -> new TradeRow(rs.getObject(1, UUID.class), rs.getString(2), rs.getString(3),
-                        rs.getBigDecimal(4), rs.getBigDecimal(5), rs.getObject(6, OffsetDateTime.class)))
-                .single();
+        TradeEntity t = trades.save(new TradeEntity(CurrentUser.id(), ticker, side, qty, price));
+        return new TradeRow(t.getId(), t.getTicker(), t.getSide(), t.getQuantity(), t.getPrice(), t.getExecutedAt());
     }
 
     public void insertSnapshot(BigDecimal totalValue) {
-        jdbc.sql("INSERT INTO portfolio_snapshots (user_id, total_value) VALUES (:u, :v)")
-                .param("u", CurrentUser.id()).param("v", totalValue).update();
+        snapshots.save(new PortfolioSnapshotEntity(CurrentUser.id(), totalValue));
     }
 
     /** Snapshots oldest first (most recent {@code limit}). */
     public List<SnapshotRow> snapshots(int limit) {
-        return jdbc.sql("""
-                        SELECT total_value, recorded_at FROM (
-                          SELECT total_value, recorded_at FROM portfolio_snapshots
-                          WHERE user_id = :u ORDER BY recorded_at DESC LIMIT :n
-                        ) s ORDER BY recorded_at ASC
-                        """)
-                .param("u", CurrentUser.id()).param("n", limit)
-                .query((rs, i) -> new SnapshotRow(rs.getBigDecimal(1), rs.getObject(2, OffsetDateTime.class)))
-                .list();
+        List<SnapshotRow> rows = new ArrayList<>(snapshots
+                .findByUserIdOrderByRecordedAtDesc(CurrentUser.id(), PageRequest.of(0, limit)).stream()
+                .map(s -> new SnapshotRow(s.getTotalValue(), s.getRecordedAt()))
+                .toList());
+        Collections.reverse(rows);
+        return rows;
     }
 }

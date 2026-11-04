@@ -23,7 +23,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
-import org.springframework.jdbc.core.simple.JdbcClient;
+import com.finallyapp.persistence.UserProfileRepository;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.web.savedrequest.DefaultSavedRequest;
@@ -44,8 +44,8 @@ class SecurityConfigTest {
     UserProvisioning provisioning;
     @MockitoBean
     WatchlistService watchlist;
-    @MockitoBean(answers = org.mockito.Answers.RETURNS_DEEP_STUBS)
-    JdbcClient jdbc;
+    @MockitoBean
+    UserProfileRepository profiles;
     @MockitoBean
     MarketDataSource source;
 

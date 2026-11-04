@@ -1,6 +1,5 @@
 package com.finallyapp.watchlist;
 
-import com.finallyapp.security.CurrentUser;
 import com.finallyapp.api.model.WatchlistItem;
 import com.finallyapp.config.Tickers;
 import com.finallyapp.error.ApiException;
@@ -8,70 +7,71 @@ import com.finallyapp.error.ErrorCodes;
 import com.finallyapp.market.PriceCache;
 import com.finallyapp.market.PriceTick;
 import com.finallyapp.market.TickerTracker;
-import java.time.OffsetDateTime;
+import com.finallyapp.persistence.WatchlistEntryEntity;
+import com.finallyapp.persistence.WatchlistRepository;
+import com.finallyapp.security.CurrentUser;
 import java.util.List;
-import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 @Service
 public class WatchlistService {
 
-
-    private final JdbcClient jdbc;
+    private final WatchlistRepository repo;
     private final PriceCache cache;
     private final TickerTracker tracker;
 
-    public WatchlistService(JdbcClient jdbc, PriceCache cache, TickerTracker tracker) {
-        this.jdbc = jdbc;
+    public WatchlistService(WatchlistRepository repo, PriceCache cache, TickerTracker tracker) {
+        this.repo = repo;
         this.cache = cache;
         this.tracker = tracker;
     }
 
-    private record Row(String ticker, OffsetDateTime addedAt) {
-    }
-
     public List<WatchlistItem> list() {
-        return jdbc.sql("SELECT ticker, added_at FROM watchlist WHERE user_id = :u ORDER BY added_at, ticker")
-                .param("u", CurrentUser.id())
-                .query((rs, i) -> new Row(rs.getString(1), rs.getObject(2, OffsetDateTime.class)))
-                .list().stream().map(this::toItem).toList();
+        return entries().stream().map(this::toItem).toList();
     }
 
     public List<String> tickers() {
-        return jdbc.sql("SELECT ticker FROM watchlist WHERE user_id = :u ORDER BY added_at, ticker")
-                .param("u", CurrentUser.id()).query(String.class).list();
+        return entries().stream().map(WatchlistEntryEntity::getTicker).toList();
+    }
+
+    private List<WatchlistEntryEntity> entries() {
+        return repo.findByUserIdOrderByAddedAtAscTickerAsc(CurrentUser.id());
     }
 
     /** Adds a ticker (400 INVALID_TICKER, 409 TICKER_EXISTS) and starts its live prices. */
     public WatchlistItem add(String rawTicker) {
         String ticker = Tickers.normalize(rawTicker);
-        Row row = jdbc.sql("""
-                        INSERT INTO watchlist (user_id, ticker) VALUES (:u, :t)
-                        ON CONFLICT (user_id, ticker) DO NOTHING
-                        RETURNING ticker, added_at
-                        """)
-                .param("u", CurrentUser.id()).param("t", ticker)
-                .query((rs, i) -> new Row(rs.getString(1), rs.getObject(2, OffsetDateTime.class)))
-                .optional()
-                .orElseThrow(() -> ApiException.conflict(ErrorCodes.TICKER_EXISTS, ticker + " is already on the watchlist"));
+        String user = CurrentUser.id();
+        if (repo.existsByUserIdAndTicker(user, ticker)) {
+            throw exists(ticker);
+        }
+        WatchlistEntryEntity saved;
+        try {
+            saved = repo.saveAndFlush(new WatchlistEntryEntity(user, ticker));
+        } catch (DataIntegrityViolationException e) {
+            throw exists(ticker); // added concurrently (unique user_id + ticker)
+        }
         tracker.track(ticker);
-        return toItem(row);
+        return toItem(saved);
     }
 
     /** Removes a ticker (404 NOT_FOUND); stops its prices unless a card or position still needs them. */
     public void remove(String rawTicker) {
         String ticker = rawTicker == null ? "" : rawTicker.trim().toUpperCase();
-        int n = jdbc.sql("DELETE FROM watchlist WHERE user_id = :u AND ticker = :t")
-                .param("u", CurrentUser.id()).param("t", ticker).update();
-        if (n == 0) {
+        if (repo.deleteByUserIdAndTicker(CurrentUser.id(), ticker) == 0) {
             throw ApiException.notFound(ErrorCodes.NOT_FOUND, ticker + " is not on the watchlist");
         }
         tracker.untrackIfUnused(ticker);
     }
 
-    private WatchlistItem toItem(Row r) {
-        WatchlistItem item = new WatchlistItem(r.ticker(), r.addedAt());
-        PriceTick t = cache.get(r.ticker()).orElse(null);
+    private static ApiException exists(String ticker) {
+        return ApiException.conflict(ErrorCodes.TICKER_EXISTS, ticker + " is already on the watchlist");
+    }
+
+    private WatchlistItem toItem(WatchlistEntryEntity e) {
+        WatchlistItem item = new WatchlistItem(e.getTicker(), e.getAddedAt());
+        PriceTick t = cache.get(e.getTicker()).orElse(null);
         if (t != null) {
             item.price(t.price()).previousPrice(t.previousPrice()).sessionOpenPrice(t.sessionOpenPrice())
                     .changePercent(t.changePercent());

@@ -3,21 +3,21 @@ package com.finallyapp.system;
 import com.finallyapp.api.SystemApi;
 import com.finallyapp.api.model.Health;
 import com.finallyapp.market.MarketDataSource;
+import com.finallyapp.persistence.UserProfileRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
-import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 public class HealthController implements SystemApi {
 
-    private final JdbcClient jdbc;
+    private final UserProfileRepository profiles;
     private final MarketDataSource source;
     private final boolean workflowEnabled;
 
-    public HealthController(JdbcClient jdbc, MarketDataSource source,
+    public HealthController(UserProfileRepository profiles, MarketDataSource source,
                             @Value("${finally.workflow.enabled:true}") boolean workflowEnabled) {
-        this.jdbc = jdbc;
+        this.profiles = profiles;
         this.source = source;
         this.workflowEnabled = workflowEnabled;
     }
@@ -26,7 +26,7 @@ public class HealthController implements SystemApi {
     public ResponseEntity<Health> getHealth() {
         String db;
         try {
-            jdbc.sql("SELECT 1").query(Integer.class).single();
+            profiles.ping();
             db = "up";
         } catch (RuntimeException e) {
             db = "down";

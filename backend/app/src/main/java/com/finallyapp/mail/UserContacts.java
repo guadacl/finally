@@ -1,13 +1,14 @@
 package com.finallyapp.mail;
 
+import com.finallyapp.persistence.UserProfileEntity;
+import com.finallyapp.persistence.UserProfileRepository;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 
 /**
@@ -26,13 +27,13 @@ public class UserContacts {
     /** E.164: '+', country code (no leading 0), 7-15 digits in total. */
     static final Pattern E164 = Pattern.compile("^\\+[1-9][0-9]{6,14}$");
 
-    private final JdbcClient jdbc;
+    private final UserProfileRepository profiles;
     /** userId -> email / phone last written to the database by this instance. */
     private final Map<String, String> syncedEmail = new ConcurrentHashMap<>();
     private final Map<String, String> syncedPhone = new ConcurrentHashMap<>();
 
-    public UserContacts(JdbcClient jdbc) {
-        this.jdbc = jdbc;
+    public UserContacts(UserProfileRepository profiles) {
+        this.profiles = profiles;
     }
 
     /** {@code +32 470 12-34-56} / {@code (+32) 470.123.456} -> {@code +32470123456}; null unless valid E.164. */
@@ -57,14 +58,12 @@ public class UserContacts {
             return;
         }
         try {
-            int rows = jdbc.sql("UPDATE users_profile SET email = :e WHERE id = :u AND email IS DISTINCT FROM :e")
-                    .param("e", normalized).param("u", userId).update();
             // Only cache once the profile row exists (it is created at first login); otherwise retry next request.
-            if (email(userId).filter(normalized::equals).isPresent()) {
-                syncedEmail.put(userId, normalized);
-                if (rows > 0) {
+            if (profiles.existsById(userId)) {
+                if (profiles.updateEmail(userId, normalized) > 0) {
                     log.info("Stored email address for user {}", userId);
                 }
+                syncedEmail.put(userId, normalized);
             }
         } catch (RuntimeException e) {
             log.warn("Could not store email address for user {}: {}", userId, e.toString());
@@ -94,16 +93,12 @@ public class UserContacts {
         }
         try {
             String value = phone.isEmpty() ? null : phone;
-            int rows = jdbc.sql("UPDATE users_profile SET phone = :p WHERE id = :u AND phone IS DISTINCT FROM :p")
-                    .param("p", value).param("u", userId).update();
-            boolean exists = jdbc.sql("SELECT count(*) FROM users_profile WHERE id = :u").param("u", userId)
-                    .query(Long.class).single() > 0;
-            if (exists && Objects.equals(phone(userId).orElse(null), value)) {
-                syncedPhone.put(userId, phone);
-                if (rows > 0) {
+            if (profiles.existsById(userId)) {
+                if (profiles.updatePhone(userId, value) > 0) {
                     log.info(value == null ? "Cleared phone number of user {}" : "Stored phone number for user {}",
                             userId);
                 }
+                syncedPhone.put(userId, phone);
             }
         } catch (RuntimeException e) {
             log.warn("Could not store phone number for user {}: {}", userId, e.toString());
@@ -112,22 +107,20 @@ public class UserContacts {
 
     /** The user's email address, if known. */
     public Optional<String> email(String userId) {
-        return column("email", userId);
+        return contact(userId, UserProfileEntity::getEmail);
     }
 
     /** The user's E.164 phone number, if known. */
     public Optional<String> phone(String userId) {
-        return column("phone", userId);
+        return contact(userId, UserProfileEntity::getPhone);
     }
 
-    private Optional<String> column(String column, String userId) {
+    private Optional<String> contact(String userId, Function<UserProfileEntity, String> field) {
         if (userId == null || userId.isBlank()) {
             return Optional.empty();
         }
-        return jdbc.sql("SELECT " + column + " FROM users_profile WHERE id = :u")
-                .param("u", userId)
-                .query(String.class)
-                .optional()
+        return profiles.findById(userId)
+                .map(field)
                 .map(String::trim)
                 .filter(v -> !v.isEmpty());
     }

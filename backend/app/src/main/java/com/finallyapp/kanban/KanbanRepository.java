@@ -1,100 +1,85 @@
 package com.finallyapp.kanban;
 
-import com.finallyapp.security.CurrentUser;
 import com.finallyapp.contracts.KanbanColumn;
+import com.finallyapp.persistence.KanbanCardEntity;
+import com.finallyapp.persistence.KanbanCardRepository;
+import com.finallyapp.security.CurrentUser;
 import java.math.BigDecimal;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
+/**
+ * Kanban cards of the current user (plus the all-users view the alert engine needs), on top of the Spring Data JPA
+ * {@link KanbanCardRepository}. Exposes immutable {@link CardRow}s so callers never hold managed entities.
+ */
 @Repository
 public class KanbanRepository {
-
-    private static final String COLS =
-            "id, ticker, column_name, target_price, sort_order, armed, process_instance_key, created_at, updated_at, user_id, comment";
 
     public record CardRow(UUID id, String ticker, KanbanColumn column, BigDecimal targetPrice, int sortOrder,
                           boolean armed, Long processInstanceKey, OffsetDateTime createdAt, OffsetDateTime updatedAt,
                           String userId, String comment) {
     }
 
-    private final JdbcClient jdbc;
+    private final KanbanCardRepository cards;
 
-    public KanbanRepository(JdbcClient jdbc) {
-        this.jdbc = jdbc;
+    public KanbanRepository(KanbanCardRepository cards) {
+        this.cards = cards;
     }
 
     public List<CardRow> findAll() {
-        return jdbc.sql("SELECT " + COLS + " FROM kanban_cards WHERE user_id = :u ORDER BY column_name DESC, sort_order, created_at")
-                .param("u", CurrentUser.id()).query(KanbanRepository::map).list();
+        return cards.findByUserIdOrderByColumnDescSortOrderAscCreatedAtAsc(CurrentUser.id()).stream()
+                .map(KanbanRepository::row).toList();
     }
 
     /** Every user's cards (for the alert engine, which watches prices for all users). */
     public List<CardRow> findAllUsers() {
-        return jdbc.sql("SELECT " + COLS + " FROM kanban_cards ORDER BY created_at")
-                .query(KanbanRepository::map).list();
+        return cards.findAllByOrderByCreatedAtAsc().stream().map(KanbanRepository::row).toList();
     }
 
     public Optional<CardRow> find(UUID id) {
-        return jdbc.sql("SELECT " + COLS + " FROM kanban_cards WHERE user_id = :u AND id = :id")
-                .param("u", CurrentUser.id()).param("id", id).query(KanbanRepository::map).optional();
+        return cards.findByIdAndUserId(id, CurrentUser.id()).map(KanbanRepository::row);
     }
 
+    /** New armed card at the end of its column. */
     public CardRow insert(String ticker, KanbanColumn column, BigDecimal target, String comment) {
-        return jdbc.sql("""
-                        INSERT INTO kanban_cards (user_id, ticker, column_name, target_price, sort_order, armed, comment)
-                        VALUES (:u, :t, :c, :p,
-                                (SELECT COALESCE(MAX(sort_order) + 1, 0) FROM kanban_cards WHERE user_id = :u AND column_name = :c),
-                                TRUE, :m)
-                        RETURNING\s""" + COLS)
-                .param("u", CurrentUser.id()).param("t", ticker).param("c", column.name()).param("p", target)
-                .param("m", comment, java.sql.Types.VARCHAR)
-                .query(KanbanRepository::map).single();
+        String user = CurrentUser.id();
+        int sortOrder = cards.nextSortOrder(user, column.name());
+        return row(cards.save(new KanbanCardEntity(user, ticker, column.name(), target, sortOrder, comment)));
     }
 
     public int nextSortOrder(KanbanColumn column) {
-        return jdbc.sql("SELECT COALESCE(MAX(sort_order) + 1, 0) FROM kanban_cards WHERE user_id = :u AND column_name = :c")
-                .param("u", CurrentUser.id()).param("c", column.name()).query(Integer.class).single();
+        return cards.nextSortOrder(CurrentUser.id(), column.name());
     }
 
     public CardRow update(UUID id, KanbanColumn column, BigDecimal target, int sortOrder, boolean armed, String comment) {
-        return jdbc.sql("""
-                        UPDATE kanban_cards
-                        SET column_name = :c, target_price = :p, sort_order = :s, armed = :a, comment = :m, updated_at = now()
-                        WHERE user_id = :u AND id = :id
-                        RETURNING\s""" + COLS)
-                .param("c", column.name()).param("p", target).param("s", sortOrder).param("a", armed)
-                .param("m", comment, java.sql.Types.VARCHAR)
-                .param("u", CurrentUser.id()).param("id", id)
-                .query(KanbanRepository::map).single();
+        KanbanCardEntity c = cards.findByIdAndUserId(id, CurrentUser.id()).orElseThrow();
+        c.setColumn(column.name());
+        c.setTargetPrice(target);
+        c.setSortOrder(sortOrder);
+        c.setArmed(armed);
+        c.setComment(comment);
+        return row(cards.saveAndFlush(c));
     }
 
     public void setProcessInstanceKey(UUID id, Long key) {
-        jdbc.sql("UPDATE kanban_cards SET process_instance_key = :k WHERE id = :id")
-                .param("k", key).param("id", id).update();
+        cards.updateProcessInstanceKey(id, key);
     }
 
+    /** Alert engine: persists the armed flag of any user's card (no-op when unchanged). */
     public void setArmed(UUID id, boolean armed) {
-        jdbc.sql("UPDATE kanban_cards SET armed = :a WHERE id = :id AND armed <> :a")
-                .param("a", armed).param("id", id).update();
+        cards.updateArmed(id, armed);
     }
 
     public boolean delete(UUID id) {
-        return jdbc.sql("DELETE FROM kanban_cards WHERE user_id = :u AND id = :id")
-                .param("u", CurrentUser.id()).param("id", id).update() > 0;
+        return cards.deleteByIdAndUserId(id, CurrentUser.id()) > 0;
     }
 
-    private static CardRow map(ResultSet rs, int i) throws SQLException {
-        long key = rs.getLong(7);
-        Long pik = rs.wasNull() ? null : key;
-        return new CardRow(rs.getObject(1, UUID.class), rs.getString(2), KanbanColumn.valueOf(rs.getString(3)),
-                rs.getBigDecimal(4), rs.getInt(5), rs.getBoolean(6), pik,
-                rs.getObject(8, OffsetDateTime.class), rs.getObject(9, OffsetDateTime.class), rs.getString(10),
-                rs.getString(11));
+    private static CardRow row(KanbanCardEntity c) {
+        return new CardRow(c.getId(), c.getTicker(), KanbanColumn.valueOf(c.getColumn()), c.getTargetPrice(),
+                c.getSortOrder(), c.isArmed(), c.getProcessInstanceKey(), c.getCreatedAt(), c.getUpdatedAt(),
+                c.getUserId(), c.getComment());
     }
 }
