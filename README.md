@@ -24,7 +24,7 @@ Built entirely by coding agents as a capstone project for an agentic AI coding c
 - Adding an alert also creates a **Support** card at the lower limit and a **Resistance** card at the upper limit
   (the alert's comment is copied onto the cards).
 
-**Support / Resistance board** (Alerts and Portfolio pages)
+**Support / Resistance targets** (two stacked tables on the Alerts page, with the Price Alerts columns; a kanban board on the Portfolio page)
 - Two kanban columns: **Support** alerts when the price falls to the target, **Resistance** when it rises to it;
   each card notifies **only once**, then shows **NOTIFIED** (also the Camunda process status); editing the target or
   moving the card re-arms it.

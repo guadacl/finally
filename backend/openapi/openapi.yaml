@@ -552,6 +552,11 @@ components:
         sortOrder: { type: integer }
         armed: { type: boolean, description: 'false once the alert fired (status NOTIFIED); true again only after the target is edited or the card is moved' }
         status: { $ref: '#/components/schemas/KanbanCardStatus' }
+        dayHigh: { type: number, nullable: true, description: 'Highest price of the current trading day (same source as PriceAlert.dayHigh)' }
+        dayLow: { type: number, nullable: true, description: 'Lowest price of the current trading day' }
+        lastSessionVolume: { type: integer, format: int64, nullable: true, description: 'Shares traded in the last completed session (null without a Massive key)' }
+        lastSessionDate: { type: string, format: date, nullable: true, description: 'Trading day the volume refers to' }
+        rsi: { type: number, nullable: true, minimum: 0, maximum: 100, description: 'RSI(14) on daily closes, live during the session (null without a Massive key or until loaded)' }
         currentPrice: { type: number, nullable: true }
         comment: { type: string, nullable: true, description: 'Free-text note, editable on the board' }
         createdAt: { type: string, format: date-time }

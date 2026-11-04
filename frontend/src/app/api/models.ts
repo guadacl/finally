@@ -193,6 +193,12 @@ export interface KanbanCard {
   currentPrice?: number | null;
   /** Free-text note, editable on the card. */
   comment?: string | null;
+  /** Same market columns as PriceAlert (Alerts page tables). */
+  dayHigh?: number | null;
+  dayLow?: number | null;
+  lastSessionVolume?: number | null;
+  lastSessionDate?: string | null;
+  rsi?: number | null;
   createdAt: string;
   updatedAt: string;
 }

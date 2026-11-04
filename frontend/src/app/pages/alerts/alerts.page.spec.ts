@@ -30,7 +30,11 @@ describe('AlertsPage', () => {
     TestBed.inject(WatchlistService).items.set([wl('AAPL'), wl('MSFT')]);
   });
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    // the page also (re)loads the Support / Resistance cards
+    http.match((r) => r.method === 'GET' && r.url === '/api/kanban').forEach((r) => r.flush([]));
+    http.verify();
+  });
 
   const q = (root: HTMLElement, id: string) => root.querySelector(`[data-testid="${id}"]`) as HTMLElement | null;
   const type = (el: HTMLElement | null, value: string) => {
@@ -77,14 +81,14 @@ describe('AlertsPage', () => {
       r.flush({ id: 'k' + i, ...r.request.body, sortOrder: i, armed: true, createdAt: '2026-11-03T10:00:00Z', updatedAt: '2026-11-03T10:00:00Z' },
         { status: 201, statusText: 'Created' }));
     await fixture.whenStable();
-    expect(q(root, 'kanban-column-SUPPORT')!.textContent).toContain('MSFT');
-    expect(q(root, 'kanban-column-RESISTANCE')!.textContent).toContain('MSFT');
+    expect(q(root, 'target-table-SUPPORT')!.textContent).toContain('MSFT');
+    expect(q(root, 'target-table-RESISTANCE')!.textContent).toContain('MSFT');
 
     expect(q(root, 'alerts-form')).toBeNull();
     const row = q(root, 'alerts-row-x1')!;
     expect(row.textContent).toContain('MSFT');
     expect(row.textContent).not.toContain('earnings week'); // the comment lives on the cards now
-    expect((q(root, 'kanban-card-comment-k0') as HTMLInputElement).value).toBe('earnings week');
+    expect((q(root, 'target-comment-k0') as HTMLInputElement).value).toBe('earnings week');
     expect(row.getAttribute('data-status')).toBe('inside');
   });
 
