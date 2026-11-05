@@ -456,6 +456,7 @@ components:
       required: [ticker, addedAt]
       properties:
         ticker: { type: string }
+        name: { type: string, nullable: true, description: 'Company name, e.g. "Enphase Energy, Inc." (null while unknown; adding a ticker waits briefly for it)' }
         price: { type: number, nullable: true, description: 'null until the first price arrives' }
         previousPrice: { type: number, nullable: true }
         sessionOpenPrice: { type: number, nullable: true, description: 'First price seen since the server started; base for daily change %' }

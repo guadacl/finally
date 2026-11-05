@@ -55,6 +55,24 @@ class TickerNamesTest {
     }
 
     @Test
+    void awaitWaitsForTheLookupOfANewTicker() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        server.expect(once(), requestTo(containsString("/v3/reference/tickers/ENPH")))
+                .andRespond(withSuccess("{\"results\":{\"ticker\":\"ENPH\",\"name\":\"Enphase Energy, Inc.\"}}",
+                        MediaType.APPLICATION_JSON));
+        TickerNames names = new TickerNames("mkey", "https://api.massive.test", "", "https://finnhub.test",
+                builder, new ObjectMapper(), Executors.newSingleThreadExecutor());
+
+        assertThat(names.await("enph", java.time.Duration.ofSeconds(5))).contains("Enphase Energy, Inc.");
+        server.verify();
+        // without any key there is nothing to wait for
+        TickerNames offline = new TickerNames("", "https://api.massive.test", "", "https://finnhub.test",
+                RestClient.builder(), new ObjectMapper(), Executors.newSingleThreadExecutor());
+        assertThat(offline.await("ENPH", java.time.Duration.ofSeconds(5))).isEmpty();
+    }
+
+    @Test
     void fallsBackToFinnhubWhenMassiveHasNoName() throws Exception {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();

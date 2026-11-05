@@ -116,6 +116,8 @@ export interface WatchlistAddRequest {
 
 export interface WatchlistItem {
   ticker: string;
+  /** Company name, e.g. "Enphase Energy, Inc." (null while unknown). */
+  name?: string | null;
   price?: number | null;
   previousPrice?: number | null;
   sessionOpenPrice?: number | null;

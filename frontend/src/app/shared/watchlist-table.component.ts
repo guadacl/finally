@@ -22,6 +22,11 @@ import { SparklineComponent } from './sparkline.component';
       <span class="block h-5 w-0.5 rounded" [class.bg-accent]="selected()"></span>
     </td>
     <td class="font-semibold tracking-wide">{{ item().ticker }}</td>
+    @if (showName()) {
+      <td class="max-w-64 truncate text-muted" [attr.title]="item().name ?? null" [attr.data-testid]="'watchlist-name-' + item().ticker">
+        {{ item().name || '—' }}
+      </td>
+    }
     <td class="num text-right">
       <span class="rounded px-1" [appPriceFlash]="price()" data-testid="watchlist-price">{{ price() | price }}</span>
     </td>
@@ -50,6 +55,7 @@ export class WatchlistRowComponent {
   readonly selected = input(false);
   readonly selectable = input(false);
   readonly removable = input(false);
+  readonly showName = input(false);
   readonly pick = output<string>();
   readonly remove = output<string>();
 
@@ -103,6 +109,9 @@ export class WatchlistRowComponent {
           <tr>
             <th></th>
             <th>Ticker</th>
+            @if (showName()) {
+              <th>Name</th>
+            }
             <th class="!text-right">Price</th>
             <th class="!text-right">Chg %</th>
             <th>Trend</th>
@@ -119,12 +128,13 @@ export class WatchlistRowComponent {
               [selected]="item.ticker === selected()"
               [selectable]="selectable()"
               [removable]="removable()"
+              [showName]="showName()"
               (pick)="pick.emit($event)"
               (remove)="removeTicker($event)"
             ></tr>
           } @empty {
             <tr>
-              <td colspan="6" class="py-6 text-center text-muted">
+              <td colspan="7" class="py-6 text-center text-muted">
                 {{ watchlist.loaded() ? 'Watchlist is empty' : 'Loading…' }}
               </td>
             </tr>
@@ -141,6 +151,8 @@ export class WatchlistTableComponent {
   readonly selectable = input(false);
   readonly removable = input(true);
   readonly showAdd = input(true);
+  /** Company name column (Watchlists page; the narrow Markets panel leaves it off). */
+  readonly showName = input(false);
   readonly pick = output<string>();
 
   readonly draft = signal('');

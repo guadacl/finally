@@ -4,13 +4,16 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.finallyapp.config.FinallyProperties;
 import jakarta.annotation.PreDestroy;
+import java.time.Duration;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -86,8 +89,8 @@ public class TickerNames {
     private final ExecutorService executor;
 
     private final Map<String, String> names = new ConcurrentHashMap<>(BUILT_IN);
-    /** Tickers already looked up (found or not), so each costs at most one API call per process. */
-    private final Set<String> attempted = ConcurrentHashMap.newKeySet();
+    /** Lookups started (finished or not), so each ticker costs at most one API call per process. */
+    private final Map<String, CompletableFuture<Void>> lookups = new ConcurrentHashMap<>();
 
     @Autowired
     public TickerNames(FinallyProperties props, RestClient.Builder builder, ObjectMapper mapper) {
@@ -116,12 +119,52 @@ public class TickerNames {
         if (ticker == null || ticker.isBlank()) {
             return Optional.empty();
         }
-        String t = ticker.trim().toUpperCase(Locale.ROOT);
+        String t = normalize(ticker);
         String name = names.get(t);
-        if (name == null && (massive != null || finnhub != null) && attempted.add(t)) {
-            executor.execute(() -> lookup(t));
+        if (name == null) {
+            start(t);
         }
         return Optional.ofNullable(name);
+    }
+
+    /**
+     * Like {@link #get} but waits up to {@code timeout} for a lookup in progress, e.g. when a ticker is just
+     * added to the watchlist so its row shows the name right away. Still empty when unknown after the wait.
+     */
+    public Optional<String> await(String ticker, Duration timeout) {
+        Optional<String> now = get(ticker);
+        if (now.isPresent()) {
+            return now;
+        }
+        String t = normalize(ticker);
+        CompletableFuture<Void> f = lookups.get(t);
+        if (f != null) {
+            try {
+                f.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } catch (Exception e) {
+                // timeout or failure: the name stays unknown for now
+            }
+        }
+        return Optional.ofNullable(names.get(t));
+    }
+
+    private void start(String t) {
+        if (massive == null && finnhub == null) {
+            return;
+        }
+        lookups.computeIfAbsent(t, k -> {
+            try {
+                return CompletableFuture.runAsync(() -> lookup(k), executor);
+            } catch (RejectedExecutionException e) {
+                return CompletableFuture.completedFuture(null); // shutting down
+            }
+        });
+    }
+
+    private static String normalize(String ticker) {
+        return ticker == null ? "" : ticker.trim().toUpperCase(Locale.ROOT);
     }
 
     void lookup(String ticker) {
