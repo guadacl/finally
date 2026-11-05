@@ -25,7 +25,8 @@ public class PriceAlertController implements AlertsApi {
 
     @Override
     public ResponseEntity<PriceAlert> createPriceAlert(PriceAlertCreate req) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(service.create(req));
+        PriceAlertService.Upserted r = service.create(req);
+        return ResponseEntity.status(r.created() ? HttpStatus.CREATED : HttpStatus.OK).body(r.alert());
     }
 
     @Override

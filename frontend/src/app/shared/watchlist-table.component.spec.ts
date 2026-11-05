@@ -42,6 +42,32 @@ describe('WatchlistTableComponent', () => {
     expect(q('watchlist-name-ZZZZ')!.textContent!.trim()).toBe('—');
   });
 
+  it('filters rows by ticker or company name from the search box', async () => {
+    const fixture = TestBed.createComponent(WatchlistTableComponent);
+    fixture.componentRef.setInput('showName', true);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const root: HTMLElement = fixture.nativeElement;
+    const rows = () => Array.from(root.querySelectorAll('tbody tr[data-testid^="watchlist-row-"]')).map((r) => r.getAttribute('data-testid'));
+    const search = root.querySelector('[data-testid="watchlist-search"]') as HTMLInputElement;
+    const type = async (v: string) => {
+      search.value = v;
+      search.dispatchEvent(new Event('input'));
+      await fixture.whenStable();
+    };
+
+    await type('enphase');
+    expect(rows()).toEqual(['watchlist-row-ENPH']);
+    await type('zz');
+    expect(rows()).toEqual(['watchlist-row-ZZZZ']);
+    await type('nothing');
+    expect(rows()).toEqual([]);
+    expect(root.querySelector('[data-testid="watchlist-no-match"]')!.textContent).toContain('nothing');
+    (root.querySelector('[data-testid="watchlist-search-clear"]') as HTMLButtonElement).click();
+    await fixture.whenStable();
+    expect(rows()).toEqual(['watchlist-row-ENPH', 'watchlist-row-ZZZZ']);
+  });
+
   it('leaves the name out by default (Markets panel)', async () => {
     const { heads, q } = await render(false);
     expect(heads).not.toContain('Name');

@@ -177,7 +177,11 @@ export class KanbanBoardComponent {
     if (moved < 0) return;
     transferArrayItem(lists[source], lists[target], moved, lists[target].length);
     this.kanban.reorder(lists).subscribe({
-      error: () => this.kanban.load(), // resync with the server on failure
+      error: (err) => {
+        // e.g. 409: the ticker already has a card in the target column (one card per ticker per column)
+        this.error.set(errorMessage(err, 'Move failed'));
+        this.kanban.load(); // resync with the server
+      },
     });
   }
 }

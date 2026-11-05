@@ -162,13 +162,19 @@ class ControllerTest {
     void kanbanCrud() throws Exception {
         UUID id = UUID.randomUUID();
         KanbanCard card = new KanbanCard(id, "AAPL", KanbanColumn.SUPPORT, new BigDecimal("185"), 0, true, NOW, NOW);
-        when(kanban.create(any())).thenReturn(card);
+        when(kanban.create(any())).thenReturn(new com.finallyapp.kanban.KanbanService.Upserted(card, true));
         mvc.perform(post("/api/kanban").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"ticker\":\"AAPL\",\"column\":\"SUPPORT\",\"targetPrice\":185}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(id.toString()))
                 .andExpect(jsonPath("$.column").value("SUPPORT"))
                 .andExpect(jsonPath("$.armed").value(true));
+        // the ticker already had a card in that column: it was updated -> 200
+        when(kanban.create(any())).thenReturn(new com.finallyapp.kanban.KanbanService.Upserted(card, false));
+        mvc.perform(post("/api/kanban").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ticker\":\"AAPL\",\"column\":\"SUPPORT\",\"targetPrice\":185}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(id.toString()));
 
         mvc.perform(post("/api/kanban").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"ticker\":\"AAPL\",\"column\":\"SUPPORT\",\"targetPrice\":0}"))

@@ -85,4 +85,14 @@ public class PriceAlertEntity {
     public OffsetDateTime getCreatedAt() {
         return createdAt;
     }
+
+    /** Re-adding a ticker that already has an alert replaces its limits (one alert per ticker). */
+    public void setLimits(BigDecimal upperLimit, BigDecimal lowerLimit) {
+        this.upperLimit = upperLimit;
+        this.lowerLimit = lowerLimit;
+    }
+
+    public void setComment(String comment) {
+        this.comment = comment;
+    }
 }

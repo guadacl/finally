@@ -5,6 +5,7 @@ import { PriceStreamService } from '../core/price-stream.service';
 import { TICKER_PATTERN, WatchlistService, changePercent, normalizeTicker } from '../core/watchlist.service';
 import { PctPipe, PricePipe, signClass } from './format';
 import { PriceFlashDirective } from './price-flash.directive';
+import { SearchBoxComponent, matchesSearch } from './search-box.component';
 import { SparklineComponent } from './sparkline.component';
 
 /** One watchlist row; reads its ticker's live price signal. */
@@ -80,7 +81,7 @@ export class WatchlistRowComponent {
 @Component({
   selector: 'app-watchlist-table',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, WatchlistRowComponent],
+  imports: [FormsModule, WatchlistRowComponent, SearchBoxComponent],
   host: { class: 'flex min-h-0 flex-col' },
   template: `
     @if (showAdd()) {
@@ -103,6 +104,9 @@ export class WatchlistRowComponent {
         <div data-testid="watchlist-error" class="border-b border-edge bg-down/10 px-2 py-1 text-xs text-down">{{ e }}</div>
       }
     }
+    <div class="border-b border-edge px-2 py-1.5">
+      <app-search-box [(query)]="search" [fullWidth]="true" testId="watchlist-search" />
+    </div>
     <div class="min-h-0 flex-1 overflow-auto">
       <table class="grid-table">
         <thead>
@@ -121,7 +125,7 @@ export class WatchlistRowComponent {
           </tr>
         </thead>
         <tbody>
-          @for (item of watchlist.items(); track item.ticker) {
+          @for (item of visibleItems(); track item.ticker) {
             <tr
               app-watchlist-row
               [item]="item"
@@ -135,7 +139,11 @@ export class WatchlistRowComponent {
           } @empty {
             <tr>
               <td colspan="7" class="py-6 text-center text-muted">
-                {{ watchlist.loaded() ? 'Watchlist is empty' : 'Loading…' }}
+                @if (search().trim() && watchlist.items().length > 0) {
+                  <span data-testid="watchlist-no-match">No tickers match "{{ search() }}"</span>
+                } @else {
+                  {{ watchlist.loaded() ? 'Watchlist is empty' : 'Loading…' }}
+                }
               </td>
             </tr>
           }
@@ -154,6 +162,10 @@ export class WatchlistTableComponent {
   /** Company name column (Watchlists page; the narrow Markets panel leaves it off). */
   readonly showName = input(false);
   readonly pick = output<string>();
+
+  /** Search text (ticker or company name). */
+  readonly search = signal('');
+  readonly visibleItems = computed(() => this.watchlist.items().filter((i) => matchesSearch(this.search(), i.ticker, i.name)));
 
   readonly draft = signal('');
   readonly error = signal<string | null>(null);

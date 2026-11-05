@@ -79,6 +79,21 @@ describe('TargetTableComponent', () => {
     expect(q('target-name-s2')!.textContent!.trim()).toBe('—'); // name not known yet
   });
 
+  it('filters cards by ticker or company name from the search box', async () => {
+    const { fixture, root, q } = render('SUPPORT');
+    const rows = () => Array.from(root.querySelectorAll('tbody tr[data-testid^="target-row-"]')).map((r) => r.getAttribute('data-testid'));
+    const search = q('target-search-SUPPORT') as HTMLInputElement;
+    search.value = 'apple';
+    search.dispatchEvent(new Event('input'));
+    await fixture.whenStable();
+    expect(rows()).toEqual(['target-row-s1']);
+    search.value = 'xyz';
+    search.dispatchEvent(new Event('input'));
+    await fixture.whenStable();
+    expect(rows()).toEqual([]);
+    expect(q('target-no-match-SUPPORT')!.textContent).toContain('xyz');
+  });
+
   it('highlights a Resistance target below the current price', () => {
     const { q } = render('RESISTANCE');
     expect(q('target-row-r1')!.getAttribute('data-broken')).toBe('true');
@@ -129,5 +144,20 @@ describe('TargetTableComponent', () => {
     const post = http.expectOne({ method: 'POST', url: '/api/kanban' });
     expect(post.request.body).toEqual({ ticker: 'MSFT', column: 'RESISTANCE', targetPrice: 600, comment: 'breakout' });
     post.flush(card('r2', 'RESISTANCE', 'MSFT', 600, { comment: 'breakout' }));
+  });
+
+  it('warns that adding a ticker already in the table updates its card', async () => {
+    const { fixture, q } = render('SUPPORT');
+    q('target-add-button-SUPPORT')!.click();
+    await fixture.whenStable();
+    const ticker = q('target-add-ticker-SUPPORT') as HTMLInputElement;
+    ticker.value = 'nvda'; // only in Resistance
+    ticker.dispatchEvent(new Event('input'));
+    await fixture.whenStable();
+    expect(q('target-exists-hint-SUPPORT')).toBeNull();
+    ticker.value = 'aapl';
+    ticker.dispatchEvent(new Event('input'));
+    await fixture.whenStable();
+    expect(q('target-exists-hint-SUPPORT')!.textContent).toContain('AAPL is already here');
   });
 });

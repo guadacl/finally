@@ -16,9 +16,11 @@ import com.finallyapp.market.TickerTracker;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 /** Kanban cards (support / resistance price targets) backed by Camunda {@code kanban-card} processes. */
@@ -49,7 +51,15 @@ public class KanbanService {
         return repo.findAll().stream().map(this::toDto).toList();
     }
 
-    public KanbanCard create(KanbanCardCreate req) {
+    /** A created card ({@code created}) or the existing card of that ticker and column, updated. */
+    public record Upserted(KanbanCard card, boolean created) {
+    }
+
+    /**
+     * Adds a card. A ticker appears at most once per column: when the column already has a card for the ticker,
+     * that card is updated instead (new target, re-armed; comment replaced only when one is given).
+     */
+    public Upserted create(KanbanCardCreate req) {
         String ticker = Tickers.normalize(req.getTicker());
         if (req.getColumn() == null) {
             throw ApiException.badRequest(ErrorCodes.INVALID_REQUEST, "column must be SUPPORT or RESISTANCE");
@@ -58,7 +68,18 @@ public class KanbanService {
         BigDecimal target = validatePrice(req.getTargetPrice());
         String comment = comment(req.getComment());
 
-        CardRow row = repo.insert(ticker, column, target, comment);
+        Optional<CardRow> existing = repo.findByTickerAndColumn(ticker, column);
+        if (existing.isPresent()) {
+            return new Upserted(updateExisting(existing.get(), target, comment), false);
+        }
+        CardRow row;
+        try {
+            row = repo.insert(ticker, column, target, comment);
+        } catch (DataIntegrityViolationException e) {
+            // added concurrently (unique user + ticker + column): update that card instead
+            CardRow other = repo.findByTickerAndColumn(ticker, column).orElseThrow(() -> e);
+            return new Upserted(updateExisting(other, target, comment), false);
+        }
         tracker.track(ticker);
         Long key = null;
         try {
@@ -72,7 +93,15 @@ public class KanbanService {
                     key, row.createdAt(), row.updatedAt(), row.userId(), row.comment());
         }
         alerts.put(row.id(), row.userId(), row.ticker(), row.column(), row.targetPrice(), row.armed());
-        return toDto(row);
+        return new Upserted(toDto(row), true);
+    }
+
+    private KanbanCard updateExisting(CardRow cur, BigDecimal target, String comment) {
+        KanbanCardUpdate upd = new KanbanCardUpdate().targetPrice(target);
+        if (comment != null) {
+            upd.comment(comment);
+        }
+        return update(cur.id(), upd);
     }
 
     /**
@@ -89,6 +118,10 @@ public class KanbanService {
         }
         boolean columnChanged = column != cur.column();
         boolean targetChanged = target.compareTo(cur.targetPrice()) != 0;
+        if (columnChanged && repo.findByTickerAndColumn(cur.ticker(), column).isPresent()) {
+            throw ApiException.conflict(ErrorCodes.TICKER_EXISTS,
+                    cur.ticker() + " is already in the " + label(column) + " table");
+        }
 
         int sortOrder;
         if (req.getSortOrder() != null) {
@@ -158,6 +191,10 @@ public class KanbanService {
                     "The comment can be at most " + MAX_COMMENT + " characters");
         }
         return c;
+    }
+
+    private static String label(KanbanColumn column) {
+        return column == KanbanColumn.SUPPORT ? "Support" : "Resistance";
     }
 
     private static ApiException notFound(UUID id) {

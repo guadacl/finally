@@ -27,7 +27,7 @@ describe('AlertsPage', () => {
       ],
     });
     http = TestBed.inject(HttpTestingController);
-    TestBed.inject(WatchlistService).items.set([wl('AAPL'), wl('MSFT')]);
+    TestBed.inject(WatchlistService).items.set([{ ...wl('AAPL'), name: 'Apple Inc.' }, wl('MSFT')]);
   });
 
   afterEach(() => {
@@ -56,6 +56,8 @@ describe('AlertsPage', () => {
     await fixture.whenStable();
     const options = Array.from((q(root, 'alerts-ticker') as HTMLSelectElement).options).map((o) => o.value).filter(Boolean);
     expect(options).toEqual(['AAPL', 'MSFT']);
+    const labels = Array.from((q(root, 'alerts-ticker') as HTMLSelectElement).options).filter((o) => o.value).map((o) => o.textContent!.trim());
+    expect(labels).toEqual(['AAPL — Apple Inc.', 'MSFT']); // company name when known
 
     TestBed.inject(PriceStreamService).apply({ ticker: 'MSFT', price: 500, previousPrice: 499, timestamp: '2026-11-03T10:00:00Z', direction: 'up' });
     type(q(root, 'alerts-ticker'), 'MSFT');
