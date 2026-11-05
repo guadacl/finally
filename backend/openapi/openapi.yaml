@@ -547,6 +547,7 @@ components:
       properties:
         id: { type: string, format: uuid }
         ticker: { type: string }
+        name: { type: string, nullable: true, description: 'Company name, e.g. "Apple Inc." (built in for common tickers, otherwise looked up once from Massive/Finnhub; null while unknown)' }
         column: { $ref: '#/components/schemas/KanbanColumn' }
         targetPrice: { type: number }
         sortOrder: { type: integer }
@@ -585,6 +586,7 @@ components:
       properties:
         id: { type: string, format: uuid }
         ticker: { type: string }
+        name: { type: string, nullable: true, description: 'Company name, e.g. "Apple Inc." (null while unknown)' }
         upperLimit: { type: number, nullable: true }
         lowerLimit: { type: number, nullable: true }
         comment: { type: string, nullable: true }

@@ -155,7 +155,7 @@ describe('AlertsPage', () => {
   it('shows day low/high (widened by the live price) and last-session volume', async () => {
     const fixture = TestBed.createComponent(AlertsPage);
     fixture.detectChanges();
-    http.expectOne('/api/alerts').flush([{ id: 'v1', ticker: 'AAPL', upperLimit: 400, dayHigh: 343.8, dayLow: 335.82,
+    http.expectOne('/api/alerts').flush([{ id: 'v1', ticker: 'AAPL', name: 'Apple Inc.', upperLimit: 400, dayHigh: 343.8, dayLow: 335.82,
       lastSessionVolume: 64_757_691, lastSessionDate: '2026-11-02', createdAt: '2026-11-03T10:00:00Z' }]);
     TestBed.inject(PriceStreamService).apply({ ticker: 'AAPL', price: 345.1, previousPrice: 344, timestamp: '2026-11-03T15:00:00Z', direction: 'up' });
     await fixture.whenStable();
@@ -164,6 +164,7 @@ describe('AlertsPage', () => {
     expect(q(root, 'alerts-dayhigh-v1')!.textContent).toContain('345.10');
     expect(q(root, 'alerts-volume-v1')!.textContent).toContain('64.76M');
     expect(q(root, 'alerts-volume-v1')!.getAttribute('title')).toContain('2 Nov');
+    expect(q(root, 'alerts-name-v1')!.textContent!.trim()).toBe('Apple Inc.');
   });
 
   it('deletes an alert', async () => {
