@@ -34,6 +34,14 @@ public final class KanbanProcess {
     public static final String VAR_PRICE = "price";
     /** Keycloak subject of the card owner; routes notifications to that user only. */
     public static final String VAR_USER_ID = "userId";
+    /**
+     * Card alert status: {@link #STATUS_ACTIVE} until the first target hit, then {@link #STATUS_NOTIFIED} (set by the
+     * BPMN script task {@code Task_SetStatusNotified}); later hits are ignored by {@code Gateway_AlreadyNotified}.
+     * Moving the card / editing the target sets it back to ACTIVE ({@code Task_SetStatusActive}).
+     */
+    public static final String VAR_STATUS = "status";
+    public static final String STATUS_ACTIVE = "ACTIVE";
+    public static final String STATUS_NOTIFIED = "NOTIFIED";
 
     private KanbanProcess() {
     }

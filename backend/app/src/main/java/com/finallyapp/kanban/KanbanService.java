@@ -10,7 +10,7 @@ import com.finallyapp.contracts.KanbanWorkflow;
 import com.finallyapp.error.ApiException;
 import com.finallyapp.error.ErrorCodes;
 import com.finallyapp.kanban.KanbanRepository.CardRow;
-import com.finallyapp.market.PriceCache;
+import com.finallyapp.market.MarketStats;
 import com.finallyapp.market.TickerTracker;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -31,15 +31,15 @@ public class KanbanService {
     private final KanbanWorkflow workflow;
     private final AlertEngine alerts;
     private final TickerTracker tracker;
-    private final PriceCache cache;
+    private final MarketStats stats;
 
     public KanbanService(KanbanRepository repo, KanbanWorkflow workflow, AlertEngine alerts,
-                         TickerTracker tracker, PriceCache cache) {
+                         TickerTracker tracker, MarketStats stats) {
         this.repo = repo;
         this.workflow = workflow;
         this.alerts = alerts;
         this.tracker = tracker;
-        this.cache = cache;
+        this.stats = stats;
     }
 
     public List<KanbanCard> list() {
@@ -169,8 +169,15 @@ public class KanbanService {
         KanbanCard c = new KanbanCard(r.id(), r.ticker(),
                 com.finallyapp.api.model.KanbanColumn.fromValue(r.column().name()),
                 r.targetPrice().stripTrailingZeros(), r.sortOrder(), r.armed(), r.createdAt(), r.updatedAt());
-        c.setCurrentPrice(cache.price(r.ticker()));
+        MarketStats.Stats s = stats.of(r.ticker());
+        c.setCurrentPrice(s.price());
         c.setComment(r.comment());
+        c.setStatus(com.finallyapp.api.model.KanbanCardStatus.fromValue(AlertRules.status(r.armed()).name()));
+        c.setDayHigh(s.dayHigh());
+        c.setDayLow(s.dayLow());
+        c.setLastSessionVolume(s.lastSessionVolume());
+        c.setLastSessionDate(s.lastSessionDate());
+        c.setRsi(s.rsi());
         return c;
     }
 }

@@ -62,6 +62,15 @@ describe('KanbanCardComponent', () => {
     expect(root.getAttribute('data-armed')).toBe('false');
   });
 
+  it('shows a NOTIFIED badge only once the alert fired', () => {
+    const { fixture, root } = setup(); // fixture card: armed = false (notified)
+    const badge = () => root.querySelector('[data-testid="kanban-card-status-c1"]');
+    expect(badge()?.textContent?.trim()).toBe('Notified');
+    fixture.componentRef.setInput('card', { ...card, armed: true, status: 'ACTIVE' });
+    fixture.detectChanges();
+    expect(badge()).toBeNull();
+  });
+
   it('rejects invalid prices without a request', () => {
     const { fixture, root, input } = setup();
     input.value = '-3';

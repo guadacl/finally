@@ -10,18 +10,13 @@ import { PriceStreamService } from '../../core/price-stream.service';
 import { WatchlistService } from '../../core/watchlist.service';
 import { PricePipe, VolumePipe } from '../../shared/format';
 import { PriceFlashDirective } from '../../shared/price-flash.directive';
-import { KanbanBoardComponent } from '../portfolio/kanban-board.component';
+import { rsiClass, rsiTitle } from '../../shared/rsi';
+import { TargetTableComponent } from './target-table.component';
 
 /** How often the list is reloaded for fresh day high/low, volume and RSI. */
 export const REFRESH_MS = 30_000;
 
-export type RsiZone = 'overbought' | 'oversold' | 'neutral' | 'unknown';
-
-/** Classic RSI thresholds: ≥ 70 overbought, ≤ 30 oversold. */
-export function rsiZone(rsi: number | null | undefined): RsiZone {
-  if (rsi == null || !Number.isFinite(rsi)) return 'unknown';
-  return rsi >= 70 ? 'overbought' : rsi <= 30 ? 'oversold' : 'neutral';
-}
+export { rsiZone, type RsiZone } from '../../shared/rsi';
 
 const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
   above: { label: 'Above upper', cls: 'bg-up/15 text-up' },
@@ -33,11 +28,11 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
 @Component({
   selector: 'app-alerts-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, DatePipe, PricePipe, VolumePipe, PriceFlashDirective, KanbanBoardComponent],
+  imports: [FormsModule, RouterLink, DatePipe, PricePipe, VolumePipe, PriceFlashDirective, TargetTableComponent],
   host: { class: 'block h-full' },
   template: `
-    <div class="mx-auto flex h-full max-w-6xl flex-col gap-2">
-    <section class="panel flex min-h-[240px] flex-1 flex-col overflow-hidden">
+    <div class="mx-auto flex h-full max-w-[1500px] flex-col gap-2 overflow-auto">
+    <section class="panel flex min-h-[220px] flex-1 flex-col overflow-hidden">
       <div class="panel-title">
         <span>Price alerts</span>
         <div class="flex items-center gap-3 normal-case tracking-normal">
@@ -152,12 +147,10 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
       </div>
     </section>
 
-    <section class="panel flex min-h-[340px] flex-1 flex-col overflow-hidden" data-testid="alerts-kanban">
-      <div class="panel-title">
-        <span>Target prices · Support / Resistance</span>
-        <span class="normal-case tracking-normal">Alerts via Camunda workflow</span>
-      </div>
-      <app-kanban-board class="min-h-0 flex-1" />
+    <!-- Support and Resistance: two full-width tables with the same columns as Price alerts, stacked below it -->
+    <section class="flex min-h-[220px] flex-1 flex-col gap-2" data-testid="alerts-kanban">
+      <app-target-table column="SUPPORT" class="min-h-[200px] flex-1" />
+      <app-target-table column="RESISTANCE" class="min-h-[200px] flex-1" />
     </section>
     </div>
   `,
@@ -184,8 +177,12 @@ export class AlertsPage implements OnInit {
 
   ngOnInit(): void {
     this.alerts.load();
-    // refresh day high/low and volume while the page is open (live prices come from the stream)
-    const timer = setInterval(() => this.alerts.load(), REFRESH_MS);
+    this.kanban.load();
+    // refresh day high/low, volume and RSI of all three tables while the page is open (live prices come from the stream)
+    const timer = setInterval(() => {
+      this.alerts.load();
+      this.kanban.load();
+    }, REFRESH_MS);
     this.destroyRef.onDestroy(() => clearInterval(timer));
     if (this.watchlist.items().length === 0) {
       this.watchlist.load();
@@ -257,15 +254,8 @@ export class AlertsPage implements OnInit {
     this.alerts.remove(a.id).subscribe({ error: () => this.alerts.load() });
   }
 
-  rsiClass(rsi: number | null | undefined): string {
-    return rsiZone(rsi) === 'overbought' ? 'text-down font-semibold' : rsiZone(rsi) === 'oversold' ? 'text-up font-semibold' : 'text-muted';
-  }
-
-  rsiTitle(rsi: number | null | undefined): string {
-    const zone = rsiZone(rsi);
-    if (zone === 'unknown') return 'RSI needs a Massive API key (daily closes); it appears shortly after the alert is added';
-    return zone === 'overbought' ? 'Overbought (RSI ≥ 70)' : zone === 'oversold' ? 'Oversold (RSI ≤ 30)' : 'Neutral (30 < RSI < 70)';
-  }
+  readonly rsiClass = rsiClass;
+  readonly rsiTitle = rsiTitle;
 
   livePrice(a: PriceAlert): number | null {
     return this.prices.price(a.ticker) ?? a.currentPrice ?? null;

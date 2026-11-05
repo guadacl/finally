@@ -99,6 +99,7 @@ public class CamundaKanbanWorkflow implements KanbanWorkflow {
             vars.put(KanbanProcess.VAR_COLUMN, card.column().name());
             vars.put(KanbanProcess.VAR_TARGET_PRICE, card.targetPrice());
             vars.put(KanbanProcess.VAR_USER_ID, card.userId());
+            vars.put(KanbanProcess.VAR_STATUS, KanbanProcess.STATUS_ACTIVE);
             CamundaFuture<io.camunda.client.api.response.ProcessInstanceEvent> future = client
                     .newCreateInstanceCommand()
                     .bpmnProcessId(KanbanProcess.PROCESS_ID)
@@ -127,6 +128,8 @@ public class CamundaKanbanWorkflow implements KanbanWorkflow {
         Map<String, Object> vars = new HashMap<>();
         vars.put(KanbanProcess.VAR_COLUMN, card.column().name());
         vars.put(KanbanProcess.VAR_TARGET_PRICE, card.targetPrice());
+        // moved / new target: the card is re-armed (the BPMN's Task_SetStatusActive also sets it)
+        vars.put(KanbanProcess.VAR_STATUS, KanbanProcess.STATUS_ACTIVE);
         correlate(KanbanProcess.MSG_CARD_MOVED, card.id(), vars, null, () -> fallback.cardMoved(card));
     }
 

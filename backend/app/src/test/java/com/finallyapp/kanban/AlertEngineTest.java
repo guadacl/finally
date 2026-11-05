@@ -54,24 +54,28 @@ class AlertEngineTest {
         assertThat(AlertRules.isHit(KanbanColumn.RESISTANCE, d("200"), d("199.99"))).isFalse();
         assertThat(AlertRules.evaluate(KanbanColumn.SUPPORT, d("185"), true, d("184"))).isEqualTo(Decision.FIRE);
         assertThat(AlertRules.evaluate(KanbanColumn.SUPPORT, d("185"), false, d("184"))).isEqualTo(Decision.NONE);
-        assertThat(AlertRules.evaluate(KanbanColumn.SUPPORT, d("185"), false, d("186"))).isEqualTo(Decision.REARM);
+        // a NOTIFIED card does not re-arm when the price moves back
+        assertThat(AlertRules.evaluate(KanbanColumn.SUPPORT, d("185"), false, d("186"))).isEqualTo(Decision.NONE);
         assertThat(AlertRules.evaluate(KanbanColumn.SUPPORT, d("185"), true, d("186"))).isEqualTo(Decision.NONE);
+        assertThat(AlertRules.status(true)).isEqualTo(AlertRules.Status.ACTIVE);
+        assertThat(AlertRules.status(false)).isEqualTo(AlertRules.Status.NOTIFIED);
     }
 
     @Test
-    void supportFiresOnceThenRearmsWhenPriceRecovers() {
+    void supportNotifiesOnlyOnceEvenWhenThePriceCrossesAgain() {
         UUID id = UUID.randomUUID();
         engine.put(id, "user-1", "AAPL", KanbanColumn.SUPPORT, d("185"), true);
         cache.update("AAPL", 190);
-        cache.update("AAPL", 184.97);   // cross -> fire
+        cache.update("AAPL", 184.97);   // cross -> fire, card becomes NOTIFIED
         cache.update("AAPL", 184.50);   // still below -> no second fire
         verify(workflow, timeout(2000).times(1)).targetPriceHit(eq(new KanbanCardRef(id, "AAPL", KanbanColumn.SUPPORT, d("185"), "user-1")), eq(d("184.97")));
         verify(repo, timeout(2000)).setArmed(id, false);
 
-        cache.update("AAPL", 186);      // back above -> re-arm
-        verify(repo, timeout(2000)).setArmed(id, true);
-        cache.update("AAPL", 185);      // hit again -> fire again
-        verify(workflow, timeout(2000).times(2)).targetPriceHit(any(), any());
+        cache.update("AAPL", 186);      // back above: stays NOTIFIED (no re-arm)
+        cache.update("AAPL", 185);      // hit again: no second notification
+        cache.update("AAPL", 180);
+        verify(workflow, afterDelay().times(1)).targetPriceHit(any(), any());
+        verify(repo, never()).setArmed(id, true);
     }
 
     @Test
@@ -119,14 +123,20 @@ class AlertEngineTest {
 
     @Test
     void workflowFailureDoesNotBreakEngine() {
-        UUID id = UUID.randomUUID();
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
         org.mockito.Mockito.doThrow(new RuntimeException("camunda down")).when(workflow).targetPriceHit(any(), any());
-        engine.put(id, "user-1", "AAPL", KanbanColumn.RESISTANCE, d("100"), true);
+        engine.put(first, "user-1", "AAPL", KanbanColumn.RESISTANCE, d("100"), true);
+        engine.put(second, "user-1", "MSFT", KanbanColumn.SUPPORT, d("400"), true);
         cache.update("AAPL", 101);
         verify(workflow, timeout(2000)).targetPriceHit(any(), any());
+        // the engine keeps evaluating other cards after the failure; the failed card is NOTIFIED and stays quiet
         cache.update("AAPL", 99);
         cache.update("AAPL", 102);
+        cache.update("MSFT", 399);
         verify(workflow, timeout(2000).times(2)).targetPriceHit(any(), any());
+        verify(workflow, afterDelay().times(1)).targetPriceHit(
+                eq(new KanbanCardRef(first, "AAPL", KanbanColumn.RESISTANCE, d("100"), "user-1")), any());
     }
 
     /** Wait a bit, then verify the call never happened. */

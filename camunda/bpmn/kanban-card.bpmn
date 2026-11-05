@@ -229,12 +229,34 @@
     <bpmn:sequenceFlow id="Flow_CardDeletedSmsToJoin" sourceRef="Task_SmsCardDeleted" targetRef="Gateway_JoinCardDeleted" />
     <bpmn:sequenceFlow id="Flow_ToEnd" sourceRef="Gateway_JoinCardDeleted" targetRef="EndEvent_CardDeleted" />
 
-    <!-- Live price reached the target: non-interrupting, may fire many times during the card's life. -->
+    <!--
+      Live price reached the target (non-interrupting). The card notifies ONCE: the first hit sets the process
+      variable status = "NOTIFIED" before any notification runs; later hits end at "Duplicate ignored". Only an
+      explicit change by the user (target edited / card moved, see EventSub_CardMoved) sets status back to "ACTIVE".
+    -->
     <bpmn:subProcess id="EventSub_TargetPriceHit" name="Target price hit" triggeredByEvent="true">
       <bpmn:startEvent id="StartEvent_TargetPriceHit" name="target-price-hit" isInterrupting="false">
-        <bpmn:outgoing>Flow_TargetHitToNotify</bpmn:outgoing>
+        <bpmn:outgoing>Flow_TargetHitToCheck</bpmn:outgoing>
         <bpmn:messageEventDefinition id="MessageEventDefinition_TargetPriceHit" messageRef="Message_TargetPriceHit" />
       </bpmn:startEvent>
+
+      <bpmn:exclusiveGateway id="Gateway_AlreadyNotified" name="Already notified?" default="Flow_NotYetNotified">
+        <bpmn:incoming>Flow_TargetHitToCheck</bpmn:incoming>
+        <bpmn:outgoing>Flow_AlreadyNotified</bpmn:outgoing>
+        <bpmn:outgoing>Flow_NotYetNotified</bpmn:outgoing>
+      </bpmn:exclusiveGateway>
+
+      <bpmn:endEvent id="EndEvent_DuplicateIgnored" name="Duplicate ignored">
+        <bpmn:incoming>Flow_AlreadyNotified</bpmn:incoming>
+      </bpmn:endEvent>
+
+      <bpmn:scriptTask id="Task_SetStatusNotified" name="Status: NOTIFIED">
+        <bpmn:extensionElements>
+          <zeebe:script expression="=&#34;NOTIFIED&#34;" resultVariable="status" />
+        </bpmn:extensionElements>
+        <bpmn:incoming>Flow_NotYetNotified</bpmn:incoming>
+        <bpmn:outgoing>Flow_TargetHitToNotify</bpmn:outgoing>
+      </bpmn:scriptTask>
 
       <bpmn:serviceTask id="Task_NotifyTargetHit" name="Notify: target price hit">
         <bpmn:extensionElements>
@@ -284,7 +306,12 @@
       <bpmn:endEvent id="EndEvent_TargetHitNotified" name="Alert sent">
         <bpmn:incoming>Flow_TargetHitToEnd</bpmn:incoming>
       </bpmn:endEvent>
-      <bpmn:sequenceFlow id="Flow_TargetHitToNotify" sourceRef="StartEvent_TargetPriceHit" targetRef="Task_NotifyTargetHit" />
+      <bpmn:sequenceFlow id="Flow_TargetHitToCheck" sourceRef="StartEvent_TargetPriceHit" targetRef="Gateway_AlreadyNotified" />
+      <bpmn:sequenceFlow id="Flow_AlreadyNotified" name="NOTIFIED" sourceRef="Gateway_AlreadyNotified" targetRef="EndEvent_DuplicateIgnored">
+        <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=is defined(status) and status = "NOTIFIED"</bpmn:conditionExpression>
+      </bpmn:sequenceFlow>
+      <bpmn:sequenceFlow id="Flow_NotYetNotified" name="ACTIVE" sourceRef="Gateway_AlreadyNotified" targetRef="Task_SetStatusNotified" />
+      <bpmn:sequenceFlow id="Flow_TargetHitToNotify" sourceRef="Task_SetStatusNotified" targetRef="Task_NotifyTargetHit" />
       <bpmn:sequenceFlow id="Flow_TargetHitToSplit" sourceRef="Task_NotifyTargetHit" targetRef="Gateway_SplitTargetHit" />
       <bpmn:sequenceFlow id="Flow_TargetHitToEmail" sourceRef="Gateway_SplitTargetHit" targetRef="Task_EmailTargetHit" />
       <bpmn:sequenceFlow id="Flow_TargetHitToSms" sourceRef="Gateway_SplitTargetHit" targetRef="Task_SmsTargetHit" />
@@ -293,12 +320,22 @@
       <bpmn:sequenceFlow id="Flow_TargetHitToEnd" sourceRef="Gateway_JoinTargetHit" targetRef="EndEvent_TargetHitNotified" />
     </bpmn:subProcess>
 
-    <!-- Card moved / target edited: message variables (column, targetPrice) update the process variables. -->
+    <!--
+      Card moved / target edited: message variables (column, targetPrice) update the process variables, and the
+      card is re-armed (status = "ACTIVE") so its new target can notify once again.
+    -->
     <bpmn:subProcess id="EventSub_CardMoved" name="Card moved" triggeredByEvent="true">
       <bpmn:startEvent id="StartEvent_CardMoved" name="card-moved" isInterrupting="false">
-        <bpmn:outgoing>Flow_MovedToNotify</bpmn:outgoing>
+        <bpmn:outgoing>Flow_MovedToReactivate</bpmn:outgoing>
         <bpmn:messageEventDefinition id="MessageEventDefinition_CardMoved" messageRef="Message_CardMoved" />
       </bpmn:startEvent>
+      <bpmn:scriptTask id="Task_SetStatusActive" name="Status: ACTIVE">
+        <bpmn:extensionElements>
+          <zeebe:script expression="=&#34;ACTIVE&#34;" resultVariable="status" />
+        </bpmn:extensionElements>
+        <bpmn:incoming>Flow_MovedToReactivate</bpmn:incoming>
+        <bpmn:outgoing>Flow_MovedToNotify</bpmn:outgoing>
+      </bpmn:scriptTask>
       <bpmn:serviceTask id="Task_NotifyCardMoved" name="Notify: card moved">
         <bpmn:extensionElements>
           <zeebe:taskDefinition type="finally-notify" retries="3" />
@@ -312,7 +349,8 @@
       <bpmn:endEvent id="EndEvent_CardMovedNotified" name="Move notified">
         <bpmn:incoming>Flow_MovedToEnd</bpmn:incoming>
       </bpmn:endEvent>
-      <bpmn:sequenceFlow id="Flow_MovedToNotify" sourceRef="StartEvent_CardMoved" targetRef="Task_NotifyCardMoved" />
+      <bpmn:sequenceFlow id="Flow_MovedToReactivate" sourceRef="StartEvent_CardMoved" targetRef="Task_SetStatusActive" />
+      <bpmn:sequenceFlow id="Flow_MovedToNotify" sourceRef="Task_SetStatusActive" targetRef="Task_NotifyCardMoved" />
       <bpmn:sequenceFlow id="Flow_MovedToEnd" sourceRef="Task_NotifyCardMoved" targetRef="EndEvent_CardMovedNotified" />
     </bpmn:subProcess>
   </bpmn:process>
@@ -380,41 +418,60 @@
         <dc:Bounds x="1512" y="262" width="36" height="36" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="EventSub_TargetPriceHit_di" bpmnElement="EventSub_TargetPriceHit" isExpanded="true">
-        <dc:Bounds x="160" y="600" width="760" height="260" />
+        <dc:Bounds x="160" y="600" width="1020" height="260" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="StartEvent_TargetPriceHit_di" bpmnElement="StartEvent_TargetPriceHit">
         <dc:Bounds x="200" y="712" width="36" height="36" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Task_NotifyTargetHit_di" bpmnElement="Task_NotifyTargetHit">
-        <dc:Bounds x="290" y="690" width="120" height="80" />
+        <dc:Bounds x="550" y="690" width="120" height="80" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Gateway_SplitTargetHit_di" bpmnElement="Gateway_SplitTargetHit">
-        <dc:Bounds x="450" y="705" width="50" height="50" />
+        <dc:Bounds x="710" y="705" width="50" height="50" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Task_EmailTargetHit_di" bpmnElement="Task_EmailTargetHit">
-        <dc:Bounds x="540" y="630" width="120" height="80" />
+        <dc:Bounds x="800" y="630" width="120" height="80" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Task_SmsTargetHit_di" bpmnElement="Task_SmsTargetHit">
-        <dc:Bounds x="540" y="750" width="120" height="80" />
+        <dc:Bounds x="800" y="750" width="120" height="80" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Gateway_JoinTargetHit_di" bpmnElement="Gateway_JoinTargetHit">
-        <dc:Bounds x="700" y="705" width="50" height="50" />
+        <dc:Bounds x="960" y="705" width="50" height="50" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="EndEvent_TargetHitNotified_di" bpmnElement="EndEvent_TargetHitNotified">
-        <dc:Bounds x="842" y="712" width="36" height="36" />
+        <dc:Bounds x="1102" y="712" width="36" height="36" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="EventSub_CardMoved_di" bpmnElement="EventSub_CardMoved" isExpanded="true">
-        <dc:Bounds x="160" y="900" width="460" height="140" />
+        <dc:Bounds x="160" y="900" width="610" height="140" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="StartEvent_CardMoved_di" bpmnElement="StartEvent_CardMoved">
         <dc:Bounds x="200" y="952" width="36" height="36" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="Task_NotifyCardMoved_di" bpmnElement="Task_NotifyCardMoved">
-        <dc:Bounds x="290" y="930" width="120" height="80" />
+        <dc:Bounds x="440" y="930" width="120" height="80" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="EndEvent_CardMovedNotified_di" bpmnElement="EndEvent_CardMovedNotified">
-        <dc:Bounds x="472" y="952" width="36" height="36" />
+        <dc:Bounds x="622" y="952" width="36" height="36" />
       </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_AlreadyNotified_di" bpmnElement="Gateway_AlreadyNotified" isMarkerVisible="true">
+        <dc:Bounds x="270" y="705" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="251" y="762" width="88" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_DuplicateIgnored_di" bpmnElement="EndEvent_DuplicateIgnored">
+        <dc:Bounds x="277" y="622" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="252" y="600" width="86" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_SetStatusNotified_di" bpmnElement="Task_SetStatusNotified">
+        <dc:Bounds x="360" y="690" width="120" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_SetStatusActive_di" bpmnElement="Task_SetStatusActive">
+        <dc:Bounds x="290" y="930" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
       <bpmndi:BPMNEdge id="Flow_ToColumnGateway_di" bpmnElement="Flow_ToColumnGateway">
         <di:waypoint x="188" y="280" />
         <di:waypoint x="235" y="280" />
@@ -524,44 +581,66 @@
         <di:waypoint x="1512" y="280" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_TargetHitToNotify_di" bpmnElement="Flow_TargetHitToNotify">
-        <di:waypoint x="236" y="730" />
-        <di:waypoint x="290" y="730" />
+        <di:waypoint x="480" y="730" />
+        <di:waypoint x="550" y="730" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_TargetHitToSplit_di" bpmnElement="Flow_TargetHitToSplit">
-        <di:waypoint x="410" y="730" />
-        <di:waypoint x="450" y="730" />
+        <di:waypoint x="670" y="730" />
+        <di:waypoint x="710" y="730" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_TargetHitToEmail_di" bpmnElement="Flow_TargetHitToEmail">
-        <di:waypoint x="475" y="705" />
-        <di:waypoint x="475" y="670" />
-        <di:waypoint x="540" y="670" />
+        <di:waypoint x="735" y="705" />
+        <di:waypoint x="735" y="670" />
+        <di:waypoint x="800" y="670" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_TargetHitToSms_di" bpmnElement="Flow_TargetHitToSms">
-        <di:waypoint x="475" y="755" />
-        <di:waypoint x="475" y="790" />
-        <di:waypoint x="540" y="790" />
+        <di:waypoint x="735" y="755" />
+        <di:waypoint x="735" y="790" />
+        <di:waypoint x="800" y="790" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_TargetHitEmailToJoin_di" bpmnElement="Flow_TargetHitEmailToJoin">
-        <di:waypoint x="660" y="670" />
-        <di:waypoint x="725" y="670" />
-        <di:waypoint x="725" y="705" />
+        <di:waypoint x="920" y="670" />
+        <di:waypoint x="985" y="670" />
+        <di:waypoint x="985" y="705" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_TargetHitSmsToJoin_di" bpmnElement="Flow_TargetHitSmsToJoin">
-        <di:waypoint x="660" y="790" />
-        <di:waypoint x="725" y="790" />
-        <di:waypoint x="725" y="755" />
+        <di:waypoint x="920" y="790" />
+        <di:waypoint x="985" y="790" />
+        <di:waypoint x="985" y="755" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_TargetHitToEnd_di" bpmnElement="Flow_TargetHitToEnd">
-        <di:waypoint x="750" y="730" />
-        <di:waypoint x="842" y="730" />
+        <di:waypoint x="1010" y="730" />
+        <di:waypoint x="1102" y="730" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_MovedToNotify_di" bpmnElement="Flow_MovedToNotify">
-        <di:waypoint x="236" y="970" />
-        <di:waypoint x="290" y="970" />
+        <di:waypoint x="410" y="970" />
+        <di:waypoint x="440" y="970" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="Flow_MovedToEnd_di" bpmnElement="Flow_MovedToEnd">
-        <di:waypoint x="410" y="970" />
-        <di:waypoint x="472" y="970" />
+        <di:waypoint x="560" y="970" />
+        <di:waypoint x="622" y="970" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_TargetHitToCheck_di" bpmnElement="Flow_TargetHitToCheck">
+        <di:waypoint x="236" y="730" />
+        <di:waypoint x="270" y="730" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_AlreadyNotified_di" bpmnElement="Flow_AlreadyNotified">
+        <di:waypoint x="295" y="705" />
+        <di:waypoint x="295" y="658" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="302" y="674" width="52" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_NotYetNotified_di" bpmnElement="Flow_NotYetNotified">
+        <di:waypoint x="320" y="730" />
+        <di:waypoint x="360" y="730" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="318" y="712" width="38" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_MovedToReactivate_di" bpmnElement="Flow_MovedToReactivate">
+        <di:waypoint x="236" y="970" />
+        <di:waypoint x="290" y="970" />
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>

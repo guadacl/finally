@@ -9,12 +9,14 @@ import io.camunda.zeebe.model.bpmn.instance.Message;
 import io.camunda.zeebe.model.bpmn.instance.MessageEventDefinition;
 import io.camunda.zeebe.model.bpmn.instance.ParallelGateway;
 import io.camunda.zeebe.model.bpmn.instance.Process;
+import io.camunda.zeebe.model.bpmn.instance.ScriptTask;
 import io.camunda.zeebe.model.bpmn.instance.SequenceFlow;
 import io.camunda.zeebe.model.bpmn.instance.ServiceTask;
 import io.camunda.zeebe.model.bpmn.instance.StartEvent;
 import io.camunda.zeebe.model.bpmn.instance.SubProcess;
 import io.camunda.zeebe.model.bpmn.instance.bpmndi.BpmnShape;
 import io.camunda.zeebe.model.bpmn.instance.zeebe.ZeebeHeader;
+import io.camunda.zeebe.model.bpmn.instance.zeebe.ZeebeScript;
 import io.camunda.zeebe.model.bpmn.instance.zeebe.ZeebeSubscription;
 import io.camunda.zeebe.model.bpmn.instance.zeebe.ZeebeTaskDefinition;
 import io.camunda.zeebe.model.bpmn.instance.zeebe.ZeebeTaskHeaders;
@@ -125,12 +127,48 @@ class KanbanCardBpmnTest {
         assertThat(single(join).getId()).isEqualTo(nextId);
     }
 
+    private static ZeebeScript script(String taskId) {
+        ScriptTask task = model.getModelElementById(taskId);
+        assertThat(task).as(taskId).isNotNull();
+        return task.getSingleExtensionElement(ZeebeScript.class);
+    }
+
     @Test
-    void targetHitSendsToastThenEmailAndSmsInParallel() {
+    void targetHitNotifiesOnlyOnceThenSetsStatusNotified() {
         StartEvent start = model.getModelElementById("StartEvent_TargetPriceHit");
-        assertThat(single(start).getId()).isEqualTo("Task_NotifyTargetHit");
+        FlowNode check = single(start);
+        assertThat(check.getId()).isEqualTo("Gateway_AlreadyNotified");
+        assertThat(check).isInstanceOf(ExclusiveGateway.class);
+
+        // already NOTIFIED -> end without any notification
+        SequenceFlow duplicate = model.getModelElementById("Flow_AlreadyNotified");
+        assertThat(duplicate.getSource()).isSameAs(check);
+        assertThat(duplicate.getConditionExpression().getTextContent())
+                .isEqualTo("=is defined(status) and status = \"NOTIFIED\"");
+        assertThat(duplicate.getTarget().getId()).isEqualTo("EndEvent_DuplicateIgnored");
+        assertThat(duplicate.getTarget().getOutgoing()).isEmpty();
+
+        // first hit (default flow): set status = "NOTIFIED" before notifying
+        assertThat(((ExclusiveGateway) check).getDefault().getId()).isEqualTo("Flow_NotYetNotified");
+        FlowNode setNotified = ((ExclusiveGateway) check).getDefault().getTarget();
+        assertThat(setNotified.getId()).isEqualTo("Task_SetStatusNotified");
+        ZeebeScript s = script("Task_SetStatusNotified");
+        assertThat(s.getResultVariable()).isEqualTo(KanbanProcess.VAR_STATUS);
+        assertThat(s.getExpression()).isEqualTo("=\"" + KanbanProcess.STATUS_NOTIFIED + "\"");
+
+        assertThat(single(setNotified).getId()).isEqualTo("Task_NotifyTargetHit");
         assertToastThenParallelEmailAndSms("Task_NotifyTargetHit", "Task_EmailTargetHit", "Task_SmsTargetHit",
                 "EndEvent_TargetHitNotified");
+    }
+
+    @Test
+    void cardMovedReactivatesTheCard() {
+        StartEvent start = model.getModelElementById("StartEvent_CardMoved");
+        assertThat(single(start).getId()).isEqualTo("Task_SetStatusActive");
+        ZeebeScript s = script("Task_SetStatusActive");
+        assertThat(s.getResultVariable()).isEqualTo(KanbanProcess.VAR_STATUS);
+        assertThat(s.getExpression()).isEqualTo("=\"" + KanbanProcess.STATUS_ACTIVE + "\"");
+        assertThat(single(model.getModelElementById("Task_SetStatusActive")).getId()).isEqualTo("Task_NotifyCardMoved");
     }
 
     @Test

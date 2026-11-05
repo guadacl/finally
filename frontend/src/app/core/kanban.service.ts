@@ -125,7 +125,7 @@ export class KanbanService {
         if (old.column !== column) patch.column = column;
         if (old.sortOrder !== index || patch.column) patch.sortOrder = index;
         const moved = patch.column !== undefined;
-        next.push({ ...old, column, sortOrder: index, armed: moved ? true : old.armed });
+        next.push({ ...old, column, sortOrder: index, armed: moved ? true : old.armed, status: moved ? 'ACTIVE' : old.status });
         if (Object.keys(patch).length) requests.push(this.api.updateKanbanCard(card.id, patch));
       });
     });

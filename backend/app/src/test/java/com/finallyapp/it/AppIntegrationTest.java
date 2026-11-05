@@ -3,6 +3,7 @@ package com.finallyapp.it;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
@@ -239,10 +240,15 @@ class AppIntegrationTest {
             Thread.sleep(100);
         }
         assertThat(armed).isFalse();
+        // NOTIFIED: the alert went out once and does not repeat while the price keeps ticking past the target
+        Res afterHit = call("GET", "/api/kanban", null);
+        assertThat(afterHit.body().get(0).path("status").asText()).isEqualTo("NOTIFIED");
+        verify(workflow, after(2000).times(1)).targetPriceHit(any(), any());
 
-        // Editing the target re-arms.
+        // Editing the target re-arms (ACTIVE again).
         Res edited = call("PATCH", "/api/kanban/" + id, "{\"targetPrice\":1}");
         assertThat(edited.body().path("armed").asBoolean()).isTrue();
+        assertThat(edited.body().path("status").asText()).isEqualTo("ACTIVE");
         assertThat(edited.body().path("targetPrice").decimalValue()).isEqualByComparingTo("1");
 
         Res bad = call("PATCH", "/api/kanban/" + id, "{\"targetPrice\":-5}");
