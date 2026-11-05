@@ -21,6 +21,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Price alerts shown on the Alerts page: a ticker from the user's watchlist with an upper and/or lower
@@ -67,17 +68,38 @@ public class PriceAlertService {
                 .map(PriceAlertService::row).map(this::toDto).toList();
     }
 
-    /** 400 when the ticker is not on the user's watchlist or the limits/comment are invalid. */
-    public PriceAlert create(PriceAlertCreate req) {
+    /** A created alert ({@code created}) or the ticker's existing alert, updated. */
+    public record Upserted(PriceAlert alert, boolean created) {
+    }
+
+    /**
+     * Adds an alert; 400 when the ticker is not on the user's watchlist or the limits/comment are invalid.
+     * One alert per ticker: when the ticker already has one, its limits are replaced by the new ones and its
+     * comment too when a comment is given.
+     */
+    @Transactional
+    public Upserted create(PriceAlertCreate req) {
         NewAlert a = validate(req);
         String user = CurrentUser.id();
         if (!watchlist.existsByUserIdAndTicker(user, a.ticker())) {
             throw ApiException.badRequest(ErrorCodes.INVALID_TICKER,
                     a.ticker() + " is not on your watchlist - add it there first");
         }
-        Row row = row(alerts.save(new PriceAlertEntity(user, a.ticker(), a.upper(), a.lower(), a.comment())));
+        PriceAlertEntity existing = alerts.findByUserIdAndTicker(user, a.ticker()).orElse(null);
+        boolean created = existing == null;
+        PriceAlertEntity saved;
+        if (created) {
+            saved = alerts.saveAndFlush(new PriceAlertEntity(user, a.ticker(), a.upper(), a.lower(), a.comment()));
+        } else {
+            existing.setLimits(a.upper(), a.lower());
+            if (a.comment() != null) {
+                existing.setComment(a.comment());
+            }
+            saved = alerts.saveAndFlush(existing);
+        }
+        Row row = row(saved);
         tracker.track(row.ticker());
-        return toDto(row);
+        return new Upserted(toDto(row), created);
     }
 
     public void delete(UUID id) {

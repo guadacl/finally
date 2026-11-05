@@ -71,6 +71,9 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
               <span class="num h-4 text-[11px] text-muted">
                 @if (selectedPrice() != null) { now {{ selectedPrice() | price }} }
               </span>
+              @if (ticker() && hasAlert(ticker())) {
+                <span class="text-[11px] text-accent" data-testid="alerts-exists-hint">{{ ticker() }} already has an alert: saving replaces its limits.</span>
+              }
             </label>
             <label class="flex flex-col gap-1">
               <span class="text-[10px] tracking-widest text-muted uppercase">Upper limit</span>
@@ -181,6 +184,10 @@ export class AlertsPage implements OnInit {
   readonly error = signal<string | null>(null);
 
   readonly watchlistTickers = computed(() => this.watchlist.items().map((i) => i.ticker));
+  hasAlert(ticker: string): boolean {
+    return this.alerts.alerts().some((a) => a.ticker === ticker);
+  }
+
   /** Search text for the price alerts table (ticker or company name). */
   readonly search = signal('');
   readonly visibleAlerts = computed(() => this.alerts.alerts().filter((a) => matchesSearch(this.search(), a.ticker, a.name)));

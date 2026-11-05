@@ -226,7 +226,10 @@ paths:
     post:
       tags: [alerts]
       operationId: createPriceAlert
-      description: Adds an alert for a ticker that is on the user's watchlist. At least one limit is required.
+      description: |
+        Adds an alert for a ticker that is on the user's watchlist. At least one limit is required.
+        One alert per ticker: when the ticker already has an alert, its limits are replaced by the new ones
+        (and its comment, when one is given) and the existing alert is returned with 200.
       requestBody:
         required: true
         content:
@@ -235,6 +238,11 @@ paths:
       responses:
         '201':
           description: Alert created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PriceAlert' }
+        '200':
+          description: The ticker already had an alert; it was updated
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PriceAlert' }
@@ -277,6 +285,10 @@ paths:
     post:
       tags: [kanban]
       operationId: createKanbanCard
+      description: |
+        Adds a Support or Resistance card. One card per ticker per column: when the column already has a card
+        for the ticker, that card gets the new target price (re-armed; comment replaced when one is given) and
+        is returned with 200.
       requestBody:
         required: true
         content:
@@ -285,6 +297,11 @@ paths:
       responses:
         '201':
           description: Card created (starts a Camunda `kanban-card` process)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KanbanCard' }
+        '200':
+          description: The ticker already had a card in that column; it was updated
           content:
             application/json:
               schema: { $ref: '#/components/schemas/KanbanCard' }
@@ -322,6 +339,11 @@ paths:
               schema: { $ref: '#/components/schemas/Error' }
         '404':
           description: Card not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          description: Moving the card to a column that already has a card for the same ticker (TICKER_EXISTS)
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }

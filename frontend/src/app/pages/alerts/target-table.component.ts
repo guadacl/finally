@@ -57,6 +57,11 @@ import { SearchBoxComponent, matchesSearch } from '../../shared/search-box.compo
             <input name="tTicker" class="field num uppercase" autocomplete="off" maxlength="10" placeholder="e.g. AAPL"
               [attr.data-testid]="'target-add-ticker-' + column()" [ngModel]="newTicker()" (ngModelChange)="newTicker.set($event); formError.set(null)" />
             <span class="num h-4 text-[11px] text-muted">@if (newLivePrice() != null) { now {{ newLivePrice() | price }} }</span>
+            @if (existingNewTicker(); as c) {
+              <span class="text-[11px] text-accent" [attr.data-testid]="'target-exists-hint-' + column()">
+                {{ c.ticker }} is already here: saving updates its target.
+              </span>
+            }
           </label>
           <label class="flex flex-col gap-1">
             <span class="text-[10px] tracking-widest text-muted uppercase">Target price</span>
@@ -194,6 +199,11 @@ export class TargetTableComponent {
   readonly formOpen = signal(false);
   readonly newTicker = signal('');
   readonly newPrice = signal('');
+  /** The column's card for the ticker being typed, if any (adding it again updates that card). */
+  readonly existingNewTicker = computed(() => {
+    const t = normalizeTicker(this.newTicker());
+    return t ? (this.rows().find((c) => c.ticker === t) ?? null) : null;
+  });
   readonly newComment = signal('');
   readonly busy = signal(false);
   readonly formError = signal<string | null>(null);

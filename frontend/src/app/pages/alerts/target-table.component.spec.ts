@@ -145,4 +145,19 @@ describe('TargetTableComponent', () => {
     expect(post.request.body).toEqual({ ticker: 'MSFT', column: 'RESISTANCE', targetPrice: 600, comment: 'breakout' });
     post.flush(card('r2', 'RESISTANCE', 'MSFT', 600, { comment: 'breakout' }));
   });
+
+  it('warns that adding a ticker already in the table updates its card', async () => {
+    const { fixture, q } = render('SUPPORT');
+    q('target-add-button-SUPPORT')!.click();
+    await fixture.whenStable();
+    const ticker = q('target-add-ticker-SUPPORT') as HTMLInputElement;
+    ticker.value = 'nvda'; // only in Resistance
+    ticker.dispatchEvent(new Event('input'));
+    await fixture.whenStable();
+    expect(q('target-exists-hint-SUPPORT')).toBeNull();
+    ticker.value = 'aapl';
+    ticker.dispatchEvent(new Event('input'));
+    await fixture.whenStable();
+    expect(q('target-exists-hint-SUPPORT')!.textContent).toContain('AAPL is already here');
+  });
 });

@@ -72,7 +72,7 @@ class MigrationsTest {
     @Order(1)
     void migrationsApplyCleanlyOnEmptyDatabase() throws SQLException {
         assertThat(firstRun.success).isTrue();
-        assertThat(firstRun.migrationsExecuted).isEqualTo(6);
+        assertThat(firstRun.migrationsExecuted).isEqualTo(7);
         assertThat(flyway().validateWithResult().validationSuccessful).isTrue();
 
         List<String> tables = new ArrayList<>();
@@ -86,7 +86,7 @@ class MigrationsTest {
             }
         }
         assertThat(tables).containsExactly(
-                "chat_messages", "kanban_cards", "portfolio_snapshots", "positions",
+                "chat_messages", "kanban_cards", "kanban_discarded_processes", "portfolio_snapshots", "positions",
                 "price_alerts", "trades", "users_profile", "watchlist");
 
         assertThat(count("SELECT count(*) FROM pg_indexes WHERE indexname IN ("
@@ -183,6 +183,35 @@ class MigrationsTest {
     }
 
     @Test
+    void kanbanCardUniquePerUserTickerAndColumn() throws SQLException {
+        exec("INSERT INTO kanban_cards (ticker, column_name, target_price) VALUES ('ZZUNI', 'SUPPORT', 10)");
+        try {
+            assertThatThrownBy(() -> exec(
+                    "INSERT INTO kanban_cards (ticker, column_name, target_price) VALUES ('ZZUNI', 'SUPPORT', 11)"))
+                    .isInstanceOf(SQLException.class)
+                    .satisfies(e -> assertThat(((SQLException) e).getSQLState()).isEqualTo("23505"));
+            // the same ticker in the other column, or for another user, is fine
+            exec("INSERT INTO kanban_cards (ticker, column_name, target_price) VALUES ('ZZUNI', 'RESISTANCE', 20)");
+            exec("INSERT INTO kanban_cards (user_id, ticker, column_name, target_price) VALUES ('other-user', 'ZZUNI', 'SUPPORT', 10)");
+        } finally {
+            exec("DELETE FROM kanban_cards WHERE ticker = 'ZZUNI'");
+        }
+    }
+
+    @Test
+    void priceAlertUniquePerUserAndTicker() throws SQLException {
+        exec("INSERT INTO price_alerts (ticker, upper_limit) VALUES ('ZZUNI', 10)");
+        try {
+            assertThatThrownBy(() -> exec("INSERT INTO price_alerts (ticker, lower_limit) VALUES ('ZZUNI', 5)"))
+                    .isInstanceOf(SQLException.class)
+                    .satisfies(e -> assertThat(((SQLException) e).getSQLState()).isEqualTo("23505"));
+            exec("INSERT INTO price_alerts (user_id, ticker, upper_limit) VALUES ('other-user', 'ZZUNI', 10)");
+        } finally {
+            exec("DELETE FROM price_alerts WHERE ticker = 'ZZUNI'");
+        }
+    }
+
+    @Test
     void positionsUniquePerUserAndTicker() throws SQLException {
         exec("INSERT INTO positions (ticker, quantity, avg_cost) VALUES ('ZZPOS', 1.5, 100)");
         try {
@@ -225,14 +254,16 @@ class MigrationsTest {
 
     @Test
     void priceAlertChecks() throws SQLException {
-        exec("INSERT INTO price_alerts (ticker, upper_limit, lower_limit, comment) VALUES ('AAPL', 200, 150, 'ok')");
-        exec("INSERT INTO price_alerts (ticker, upper_limit) VALUES ('AAPL', 200)");
-        exec("INSERT INTO price_alerts (ticker, lower_limit) VALUES ('AAPL', 150)");
-        assertCheckViolation("INSERT INTO price_alerts (ticker) VALUES ('AAPL')");
-        assertCheckViolation("INSERT INTO price_alerts (ticker, upper_limit, lower_limit) VALUES ('AAPL', 150, 200)");
-        assertCheckViolation("INSERT INTO price_alerts (ticker, upper_limit) VALUES ('AAPL', 0)");
-        assertCheckViolation("INSERT INTO price_alerts (ticker, lower_limit) VALUES ('AAPL', -1)");
-        assertCheckViolation("INSERT INTO price_alerts (ticker, upper_limit, comment) VALUES ('AAPL', 1, repeat('x', 501))");
+        // one alert per ticker (V7): each valid row uses its own ticker
+        exec("INSERT INTO price_alerts (ticker, upper_limit, lower_limit, comment) VALUES ('ZZCK1', 200, 150, 'ok')");
+        exec("INSERT INTO price_alerts (ticker, upper_limit) VALUES ('ZZCK2', 200)");
+        exec("INSERT INTO price_alerts (ticker, lower_limit) VALUES ('ZZCK3', 150)");
+        assertCheckViolation("INSERT INTO price_alerts (ticker) VALUES ('ZZCK4')");
+        assertCheckViolation("INSERT INTO price_alerts (ticker, upper_limit, lower_limit) VALUES ('ZZCK4', 150, 200)");
+        assertCheckViolation("INSERT INTO price_alerts (ticker, upper_limit) VALUES ('ZZCK4', 0)");
+        assertCheckViolation("INSERT INTO price_alerts (ticker, lower_limit) VALUES ('ZZCK4', -1)");
+        assertCheckViolation("INSERT INTO price_alerts (ticker, upper_limit, comment) VALUES ('ZZCK4', 1, repeat('x', 501))");
+        exec("DELETE FROM price_alerts WHERE ticker LIKE 'ZZCK%'");
     }
 
     private static void assertCheckViolation(String sql) {
