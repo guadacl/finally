@@ -13,6 +13,8 @@ export interface ApiError {
 export interface PriceAlert {
   id: string;
   ticker: string;
+  /** Company name, e.g. "Apple Inc." (null while unknown). */
+  name?: string | null;
   upperLimit?: number | null;
   lowerLimit?: number | null;
   comment?: string | null;
@@ -114,6 +116,8 @@ export interface WatchlistAddRequest {
 
 export interface WatchlistItem {
   ticker: string;
+  /** Company name, e.g. "Enphase Energy, Inc." (null while unknown). */
+  name?: string | null;
   price?: number | null;
   previousPrice?: number | null;
   sessionOpenPrice?: number | null;
@@ -183,6 +187,8 @@ export const COLUMN_LABEL: Readonly<Record<KanbanColumn, string>> = {
 export interface KanbanCard {
   id: string;
   ticker: string;
+  /** Company name, e.g. "Apple Inc." (null while unknown). */
+  name?: string | null;
   column: KanbanColumn;
   targetPrice: number;
   sortOrder: number;

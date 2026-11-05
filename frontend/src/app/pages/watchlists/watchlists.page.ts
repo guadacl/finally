@@ -13,7 +13,7 @@ import { WatchlistTableComponent } from '../../shared/watchlist-table.component'
         <span>Manage watchlist</span>
         <span class="num normal-case tracking-normal">{{ watchlist.items().length }} tickers · prices stream live</span>
       </div>
-      <app-watchlist-table class="min-h-0 flex-1" [removable]="true" [showAdd]="true" />
+      <app-watchlist-table class="min-h-0 flex-1" [removable]="true" [showAdd]="true" [showName]="true" />
     </section>
   `,
 })

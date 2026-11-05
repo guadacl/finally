@@ -9,6 +9,7 @@ import com.finallyapp.market.DailyCloses;
 import com.finallyapp.market.DayRangeCache;
 import com.finallyapp.market.LastSessionVolumes;
 import com.finallyapp.market.PriceCache;
+import com.finallyapp.market.TickerNames;
 import com.finallyapp.market.TickerTracker;
 import com.finallyapp.persistence.PriceAlertEntity;
 import com.finallyapp.persistence.PriceAlertRepository;
@@ -46,10 +47,12 @@ public class PriceAlertService {
     private final DayRangeCache dayRanges;
     private final LastSessionVolumes volumes;
     private final DailyCloses dailyCloses;
+    private final TickerNames names;
 
     public PriceAlertService(PriceAlertRepository alerts, WatchlistRepository watchlist, PriceCache cache,
                              TickerTracker tracker, DayRangeCache dayRanges, LastSessionVolumes volumes,
-                             DailyCloses dailyCloses) {
+                             DailyCloses dailyCloses, TickerNames names) {
+        this.names = names;
         this.alerts = alerts;
         this.watchlist = watchlist;
         this.cache = cache;
@@ -130,6 +133,7 @@ public class PriceAlertService {
                 .lowerLimit(strip(r.lower()))
                 .comment(r.comment())
                 .currentPrice(price);
+        names.get(r.ticker()).ifPresent(dto::name);
         dayRanges.get(r.ticker()).ifPresent(d -> dto.dayHigh(d.high()).dayLow(d.low()));
         volumes.get(r.ticker()).ifPresent(v -> dto.lastSessionVolume(v.volume()).lastSessionDate(v.session()));
         dailyCloses.rsi(r.ticker(), price)

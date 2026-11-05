@@ -88,6 +88,7 @@ import { fmtRsi, rsiClass, rsiTitle } from '../../shared/rsi';
             <thead class="sticky top-0 z-10 bg-panel text-[10px] tracking-widest text-muted uppercase">
               <tr class="border-b border-edge">
                 <th class="px-3 py-2 text-left">Ticker</th>
+                <th class="px-3 py-2 text-left">Name</th>
                 <th class="px-3 py-2 text-right">Price</th>
                 <th class="px-3 py-2 text-right" title="Lowest price of the current trading day">Day low</th>
                 <th class="px-3 py-2 text-right" title="Highest price of the current trading day">Day high</th>
@@ -107,6 +108,7 @@ import { fmtRsi, rsiClass, rsiTitle } from '../../shared/rsi';
                   [attr.data-testid]="'target-row-' + c.id" [attr.data-broken]="broken(c)" [attr.data-status]="statusOf(c)"
                   [attr.title]="broken(c) ? 'Price is above this resistance target' : null">
                   <td class="px-3 py-2 font-bold">{{ c.ticker }}</td>
+                  <td class="max-w-56 truncate px-3 py-2 text-muted" [attr.title]="c.name ?? null" [attr.data-testid]="'target-name-' + c.id">{{ c.name || '—' }}</td>
                   <td class="num px-3 py-2 text-right"><span class="rounded px-1" [appPriceFlash]="livePrice(c)">{{ livePrice(c) | price }}</span></td>
                   <td class="num px-3 py-2 text-right text-muted">{{ dayRange(c).low | price }}</td>
                   <td class="num px-3 py-2 text-right text-muted">{{ dayRange(c).high | price }}</td>
@@ -140,7 +142,7 @@ import { fmtRsi, rsiClass, rsiTitle } from '../../shared/rsi';
                   </td>
                 </tr>
                 @if (rowError()[c.id]; as e) {
-                  <tr><td colspan="12" class="px-3 pb-2 text-[11px] text-down" [attr.data-testid]="'target-error-' + c.id">{{ c.ticker }}: {{ e }}</td></tr>
+                  <tr><td colspan="13" class="px-3 pb-2 text-[11px] text-down" [attr.data-testid]="'target-error-' + c.id">{{ c.ticker }}: {{ e }}</td></tr>
                 }
               }
             </tbody>

@@ -107,6 +107,7 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
             <thead class="sticky top-0 bg-panel text-[10px] tracking-widest text-muted uppercase">
               <tr class="border-b border-edge">
                 <th class="px-3 py-2 text-left">Ticker</th>
+                <th class="px-3 py-2 text-left">Name</th>
                 <th class="px-3 py-2 text-right">Price</th>
                 <th class="px-3 py-2 text-right" title="Lowest price of the current trading day">Day low</th>
                 <th class="px-3 py-2 text-right" title="Highest price of the current trading day">Day high</th>
@@ -123,6 +124,7 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
               @for (a of alerts.alerts(); track a.id) {
                 <tr class="border-b border-edge/60 hover:bg-panel-2" [attr.data-testid]="'alerts-row-' + a.id" [attr.data-status]="status(a)">
                   <td class="px-3 py-2 font-bold">{{ a.ticker }}</td>
+                  <td class="max-w-56 truncate px-3 py-2 text-muted" [attr.title]="a.name ?? null" [attr.data-testid]="'alerts-name-' + a.id">{{ a.name || '—' }}</td>
                   <td class="num px-3 py-2 text-right"><span class="rounded px-1" [appPriceFlash]="livePrice(a)">{{ livePrice(a) | price }}</span></td>
                   <td class="num px-3 py-2 text-right text-muted" [attr.data-testid]="'alerts-daylow-' + a.id">{{ dayRange(a).low | price }}</td>
                   <td class="num px-3 py-2 text-right text-muted" [attr.data-testid]="'alerts-dayhigh-' + a.id">{{ dayRange(a).high | price }}</td>

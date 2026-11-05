@@ -11,6 +11,7 @@ import com.finallyapp.error.ApiException;
 import com.finallyapp.error.ErrorCodes;
 import com.finallyapp.kanban.KanbanRepository.CardRow;
 import com.finallyapp.market.MarketStats;
+import com.finallyapp.market.TickerNames;
 import com.finallyapp.market.TickerTracker;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -32,9 +33,11 @@ public class KanbanService {
     private final AlertEngine alerts;
     private final TickerTracker tracker;
     private final MarketStats stats;
+    private final TickerNames names;
 
     public KanbanService(KanbanRepository repo, KanbanWorkflow workflow, AlertEngine alerts,
-                         TickerTracker tracker, MarketStats stats) {
+                         TickerTracker tracker, MarketStats stats, TickerNames names) {
+        this.names = names;
         this.repo = repo;
         this.workflow = workflow;
         this.alerts = alerts;
@@ -178,6 +181,7 @@ public class KanbanService {
         c.setLastSessionVolume(s.lastSessionVolume());
         c.setLastSessionDate(s.lastSessionDate());
         c.setRsi(s.rsi());
+        c.setName(names.get(r.ticker()).orElse(null));
         return c;
     }
 }

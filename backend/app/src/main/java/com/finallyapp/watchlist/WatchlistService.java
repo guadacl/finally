@@ -6,10 +6,12 @@ import com.finallyapp.error.ApiException;
 import com.finallyapp.error.ErrorCodes;
 import com.finallyapp.market.PriceCache;
 import com.finallyapp.market.PriceTick;
+import com.finallyapp.market.TickerNames;
 import com.finallyapp.market.TickerTracker;
 import com.finallyapp.persistence.WatchlistEntryEntity;
 import com.finallyapp.persistence.WatchlistRepository;
 import com.finallyapp.security.CurrentUser;
+import java.time.Duration;
 import java.util.List;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -17,18 +19,23 @@ import org.springframework.stereotype.Service;
 @Service
 public class WatchlistService {
 
+    /** How long adding a ticker waits for its company name to be looked up. */
+    static final Duration NAME_WAIT = Duration.ofSeconds(3);
+
     private final WatchlistRepository repo;
     private final PriceCache cache;
     private final TickerTracker tracker;
+    private final TickerNames names;
 
-    public WatchlistService(WatchlistRepository repo, PriceCache cache, TickerTracker tracker) {
+    public WatchlistService(WatchlistRepository repo, PriceCache cache, TickerTracker tracker, TickerNames names) {
         this.repo = repo;
         this.cache = cache;
         this.tracker = tracker;
+        this.names = names;
     }
 
     public List<WatchlistItem> list() {
-        return entries().stream().map(this::toItem).toList();
+        return entries().stream().map(e -> toItem(e, names.get(e.getTicker()).orElse(null))).toList();
     }
 
     public List<String> tickers() {
@@ -53,7 +60,8 @@ public class WatchlistService {
             throw exists(ticker); // added concurrently (unique user_id + ticker)
         }
         tracker.track(ticker);
-        return toItem(saved);
+        // a new ticker's name is usually not cached yet: give the lookup a moment so the row shows it at once
+        return toItem(saved, names.await(ticker, NAME_WAIT).orElse(null));
     }
 
     /** Removes a ticker (404 NOT_FOUND); stops its prices unless a card or position still needs them. */
@@ -69,8 +77,8 @@ public class WatchlistService {
         return ApiException.conflict(ErrorCodes.TICKER_EXISTS, ticker + " is already on the watchlist");
     }
 
-    private WatchlistItem toItem(WatchlistEntryEntity e) {
-        WatchlistItem item = new WatchlistItem(e.getTicker(), e.getAddedAt());
+    private WatchlistItem toItem(WatchlistEntryEntity e, String name) {
+        WatchlistItem item = new WatchlistItem(e.getTicker(), e.getAddedAt()).name(name);
         PriceTick t = cache.get(e.getTicker()).orElse(null);
         if (t != null) {
             item.price(t.price()).previousPrice(t.previousPrice()).sessionOpenPrice(t.sessionOpenPrice())

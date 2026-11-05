@@ -40,7 +40,7 @@ describe('TargetTableComponent', () => {
       prices.apply({ ticker, price, previousPrice: price, timestamp: '2026-11-04T10:00:00Z', direction: 'up' });
     }
     TestBed.inject(KanbanService).cards.set([
-      card('s1', 'SUPPORT', 'AAPL', 150, { rsi: 74.25, dayLow: 195, dayHigh: 205, lastSessionVolume: 64_000_000 }), // -25%
+      card('s1', 'SUPPORT', 'AAPL', 150, { name: 'Apple Inc.', rsi: 74.25, dayLow: 195, dayHigh: 205, lastSessionVolume: 64_000_000 }), // -25%
       card('s2', 'SUPPORT', 'MSFT', 490, { armed: false, status: 'NOTIFIED', comment: 'earnings' }), // -2%
       card('r1', 'RESISTANCE', 'NVDA', 90, { comment: null }), // below price -> broken
     ]);
@@ -60,7 +60,7 @@ describe('TargetTableComponent', () => {
   it('has the Price Alerts columns plus target, dist, status and comment', () => {
     const { root } = render('SUPPORT');
     const heads = Array.from(root.querySelectorAll('thead th')).map((th) => th.textContent!.trim()).filter(Boolean);
-    expect(heads).toEqual(['Ticker', 'Price', 'Day low', 'Day high', 'Vol (last session)', 'RSI (14)', 'Target', 'Dist', 'Status',
+    expect(heads).toEqual(['Ticker', 'Name', 'Price', 'Day low', 'Day high', 'Vol (last session)', 'RSI (14)', 'Target', 'Dist', 'Status',
       'Comment', 'Added']);
   });
 
@@ -75,6 +75,8 @@ describe('TargetTableComponent', () => {
     expect(q('target-status-s1')!.textContent!.trim()).toBe('Active');
     expect(q('target-status-s2')!.textContent!.trim()).toBe('Notified');
     expect((q('target-comment-s2') as HTMLInputElement).value).toBe('earnings');
+    expect(q('target-name-s1')!.textContent!.trim()).toBe('Apple Inc.');
+    expect(q('target-name-s2')!.textContent!.trim()).toBe('—'); // name not known yet
   });
 
   it('highlights a Resistance target below the current price', () => {

@@ -456,6 +456,7 @@ components:
       required: [ticker, addedAt]
       properties:
         ticker: { type: string }
+        name: { type: string, nullable: true, description: 'Company name, e.g. "Enphase Energy, Inc." (null while unknown; adding a ticker waits briefly for it)' }
         price: { type: number, nullable: true, description: 'null until the first price arrives' }
         previousPrice: { type: number, nullable: true }
         sessionOpenPrice: { type: number, nullable: true, description: 'First price seen since the server started; base for daily change %' }
@@ -547,6 +548,7 @@ components:
       properties:
         id: { type: string, format: uuid }
         ticker: { type: string }
+        name: { type: string, nullable: true, description: 'Company name, e.g. "Apple Inc." (built in for common tickers, otherwise looked up once from Massive/Finnhub; null while unknown)' }
         column: { $ref: '#/components/schemas/KanbanColumn' }
         targetPrice: { type: number }
         sortOrder: { type: integer }
@@ -585,6 +587,7 @@ components:
       properties:
         id: { type: string, format: uuid }
         ticker: { type: string }
+        name: { type: string, nullable: true, description: 'Company name, e.g. "Apple Inc." (null while unknown)' }
         upperLimit: { type: number, nullable: true }
         lowerLimit: { type: number, nullable: true }
         comment: { type: string, nullable: true }
