@@ -137,21 +137,20 @@ public class AlertEngine implements PriceListener {
                 return; // deleted or edited meanwhile (the edit already persisted its own state)
             }
             try {
-                boolean current;
-                synchronized (card) {
-                    current = card.armed;
+                // compare-and-set: an edit / move / delete that committed after the identity check above wins
+                if (!repo.markNotified(ref.id(), ref.column(), ref.targetPrice())) {
+                    log.debug("Card {} changed before its hit was recorded; not notifying", card.id);
+                    return;
                 }
-                repo.setArmed(card.id, current);
             } catch (RuntimeException e) {
-                log.warn("Could not persist armed state for card {}: {}", card.id, e.toString());
+                // the hit is real: rather notify (and maybe again after a restart) than lose the alert
+                log.warn("Could not persist NOTIFIED for card {}: {}", card.id, e.toString());
             }
-            if (d == Decision.FIRE) {
-                log.info("Target hit: {} {} target {} price {}", ref.ticker(), ref.column(), ref.targetPrice(), price);
-                try {
-                    workflow.targetPriceHit(ref, price);
-                } catch (RuntimeException e) {
-                    log.error("KanbanWorkflow.targetPriceHit failed: {}", e.toString());
-                }
+            log.info("Target hit: {} {} target {} price {}", ref.ticker(), ref.column(), ref.targetPrice(), price);
+            try {
+                workflow.targetPriceHit(ref, price);
+            } catch (RuntimeException e) {
+                log.error("KanbanWorkflow.targetPriceHit failed: {}", e.toString());
             }
         });
         return d;

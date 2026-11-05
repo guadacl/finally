@@ -4,7 +4,16 @@ import { FormsModule } from '@angular/forms';
 import { isObservable } from 'rxjs';
 import { COLUMN_LABEL, KanbanCard, KanbanColumn, errorMessage } from '../../api/models';
 import { liveDayRange } from '../../core/alerts.service';
-import { KanbanService, MAX_CARD_COMMENT, cardDistance, sortByDistance, validateTargetPrice } from '../../core/kanban.service';
+import {
+  KanbanService,
+  MAX_CARD_COMMENT,
+  cardDistance,
+  cardStatus,
+  formatTarget,
+  keepShownOrder,
+  sortByDistance,
+  validateTargetPrice,
+} from '../../core/kanban.service';
 import { PriceStreamService } from '../../core/price-stream.service';
 import { TICKER_PATTERN, normalizeTicker } from '../../core/watchlist.service';
 import { PctPipe, PricePipe, VolumePipe } from '../../shared/format';
@@ -115,8 +124,8 @@ import { fmtRsi, rsiClass, rsiTitle } from '../../shared/rsi';
                   <td class="num px-3 py-2 text-right" [class]="rsiClass(c.rsi)" [attr.title]="rsiTitle(c.rsi)">{{ fmtRsi(c.rsi) }}</td>
                   <td class="px-3 py-1.5 text-right">
                     <input #t class="field num w-24 py-0.5 text-right" inputmode="decimal" [class]="isSupport() ? 'text-down' : 'text-up'"
-                      [attr.data-testid]="'target-price-' + c.id" [value]="c.targetPrice.toFixed(2)"
-                      (keydown.enter)="t.blur()" (keydown.escape)="t.value = c.targetPrice.toFixed(2); t.blur()" (blur)="saveTarget(c, t)" />
+                      [attr.data-testid]="'target-price-' + c.id" [value]="fmtTarget(c.targetPrice)"
+                      (keydown.enter)="t.blur()" (keydown.escape)="t.value = fmtTarget(c.targetPrice); t.blur()" (focus)="editing.set(c.id)" (blur)="saveTarget(c, t); editing.set(null)" />
                   </td>
                   <td class="num px-3 py-2 text-right text-muted">{{ distance(c) | pct }}</td>
                   <td class="px-3 py-2">
@@ -129,7 +138,7 @@ import { fmtRsi, rsiClass, rsiTitle } from '../../shared/rsi';
                   <td class="px-3 py-1.5">
                     <input #m class="field w-full min-w-40 py-0.5 text-[11px]" placeholder="Add a comment…" autocomplete="off"
                       [attr.maxlength]="maxComment" [attr.data-testid]="'target-comment-' + c.id" [value]="c.comment ?? ''" [attr.title]="c.comment ?? ''"
-                      (keydown.enter)="m.blur()" (keydown.escape)="m.value = c.comment ?? ''; m.blur()" (blur)="saveComment(c, m)" />
+                      (keydown.enter)="m.blur()" (keydown.escape)="m.value = c.comment ?? ''; m.blur()" (focus)="editing.set(c.id)" (blur)="saveComment(c, m); editing.set(null)" />
                   </td>
                   <td class="num px-3 py-2 text-muted">{{ c.createdAt | date: 'dd MMM HH:mm' }}</td>
                   <td class="px-3 py-2 text-right whitespace-nowrap">
@@ -173,10 +182,22 @@ export class TargetTableComponent {
   readonly otherColumn = computed<KanbanColumn>(() => (this.isSupport() ? 'RESISTANCE' : 'SUPPORT'));
   readonly otherLabel = computed(() => COLUMN_LABEL[this.otherColumn()]);
 
-  /** The column's cards, nearest target first; re-sorts as prices stream. */
-  readonly rows = computed(() =>
-    sortByDistance(this.isSupport() ? this.kanban.support() : this.kanban.resistance(), (c) => this.livePrice(c)),
-  );
+  /** Card whose target or comment field has focus; while set, the row order is frozen. */
+  readonly editing = signal<string | null>(null);
+  /** Row order last shown (card ids), kept while editing. */
+  private shownOrder: string[] = [];
+
+  /**
+   * The column's cards, nearest target first; re-sorts as prices stream, except while a field is being edited:
+   * moving the edited row would blur its input and save a half-typed value. New cards are appended meanwhile.
+   */
+  readonly rows = computed(() => {
+    const cards = this.isSupport() ? this.kanban.support() : this.kanban.resistance();
+    const sorted = sortByDistance(cards, (c) => this.livePrice(c));
+    if (this.editing() != null) return keepShownOrder(this.shownOrder, sorted);
+    this.shownOrder = sorted.map((c) => c.id);
+    return sorted;
+  });
 
   readonly formOpen = signal(false);
   readonly newTicker = signal('');
@@ -203,9 +224,8 @@ export class TargetTableComponent {
     return cardDistance(c.targetPrice, this.livePrice(c));
   }
 
-  statusOf(c: KanbanCard): 'ACTIVE' | 'NOTIFIED' {
-    return c.status ?? (c.armed ? 'ACTIVE' : 'NOTIFIED');
-  }
+  readonly statusOf = cardStatus;
+  readonly fmtTarget = formatTarget;
 
   /** Resistance target already below the current price. */
   broken(c: KanbanCard): boolean {
@@ -254,7 +274,7 @@ export class TargetTableComponent {
     const result = this.kanban.updateTargetPrice(c, el.value);
     if (!isObservable(result)) {
       if (result.ok) {
-        el.value = result.value.toFixed(2);
+        el.value = formatTarget(result.value);
         this.clearError(c.id);
       } else {
         this.setError(c.id, result.error);
@@ -263,7 +283,7 @@ export class TargetTableComponent {
     }
     result.subscribe({
       next: (saved) => {
-        el.value = saved.targetPrice.toFixed(2);
+        el.value = formatTarget(saved.targetPrice);
         this.clearError(c.id);
       },
       error: (err) => this.setError(c.id, errorMessage(err, 'Update failed')),

@@ -2,7 +2,7 @@ import { CdkDrag, CdkDragDrop, CdkDragPlaceholder, CdkDropList, CdkDropListGroup
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { COLUMN_LABEL, KANBAN_COLUMNS, KanbanCard, KanbanColumn, errorMessage } from '../../api/models';
-import { KanbanService, sortByDistance, validateTargetPrice } from '../../core/kanban.service';
+import { KanbanService, keepShownOrder, sortByDistance, validateTargetPrice } from '../../core/kanban.service';
 import { PriceStreamService } from '../../core/price-stream.service';
 import { TICKER_PATTERN, normalizeTicker } from '../../core/watchlist.service';
 import { KanbanCardComponent } from './kanban-card.component';
@@ -79,6 +79,8 @@ import { KanbanCardComponent } from './kanban-card.component';
             [cdkDropListData]="list(col)"
             cdkDropListSortingDisabled
             (cdkDropListDropped)="drop($event, col)"
+            (focusin)="editing.set(true)"
+            (focusout)="editing.set(false)"
             [attr.data-testid]="'kanban-column-' + col"
             class="kanban-list flex min-h-[120px] flex-1 flex-col gap-1.5 overflow-y-auto p-1.5"
           >
@@ -128,11 +130,22 @@ export class KanbanBoardComponent {
   /** Live price of a card (stream first, then the price the server sent with the card). */
   private readonly priceOf = (card: KanbanCard) => this.prices.state(card.ticker)()?.price ?? card.currentPrice ?? null;
 
-  /** Each column ordered by |DIST| ascending (nearest target first); re-sorts as prices stream in. */
-  private readonly sorted = computed<Record<KanbanColumn, KanbanCard[]>>(() => ({
-    SUPPORT: sortByDistance(this.kanban.support(), this.priceOf),
-    RESISTANCE: sortByDistance(this.kanban.resistance(), this.priceOf),
-  }));
+  /** True while a field inside a card has focus: the order is then frozen (see keepShownOrder). */
+  readonly editing = signal(false);
+  private shown: Record<KanbanColumn, string[]> = { SUPPORT: [], RESISTANCE: [] };
+
+  /** Each column ordered by |DIST| ascending (nearest target first); re-sorts as prices stream in, except while editing. */
+  private readonly sorted = computed<Record<KanbanColumn, KanbanCard[]>>(() => {
+    const next = {
+      SUPPORT: sortByDistance(this.kanban.support(), this.priceOf),
+      RESISTANCE: sortByDistance(this.kanban.resistance(), this.priceOf),
+    };
+    if (this.editing()) {
+      return { SUPPORT: keepShownOrder(this.shown.SUPPORT, next.SUPPORT), RESISTANCE: keepShownOrder(this.shown.RESISTANCE, next.RESISTANCE) };
+    }
+    this.shown = { SUPPORT: next.SUPPORT.map((c) => c.id), RESISTANCE: next.RESISTANCE.map((c) => c.id) };
+    return next;
+  });
 
   list(col: KanbanColumn): KanbanCard[] {
     return this.sorted()[col];

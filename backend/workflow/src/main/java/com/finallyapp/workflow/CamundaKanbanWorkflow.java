@@ -137,6 +137,11 @@ public class CamundaKanbanWorkflow implements KanbanWorkflow {
     public void targetPriceHit(KanbanCardRef card, BigDecimal price) {
         Map<String, Object> vars = new HashMap<>();
         vars.put(KanbanProcess.VAR_PRICE, price);
+        // The app is the source of truth for what was hit: if a card-moved correlation was lost (Camunda down
+        // during the edit), these refresh the process's column / target, and Gateway_AlreadyNotified only drops
+        // the hit when this exact column + target was already notified, so a stale NOTIFIED cannot block it.
+        vars.put(KanbanProcess.VAR_COLUMN, card.column().name());
+        vars.put(KanbanProcess.VAR_TARGET_PRICE, card.targetPrice());
         correlate(KanbanProcess.MSG_TARGET_PRICE_HIT, card.id(), vars, null,
                 () -> fallback.targetPriceHit(card, price));
     }

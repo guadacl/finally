@@ -543,7 +543,7 @@ components:
 
     KanbanCard:
       type: object
-      required: [id, ticker, column, targetPrice, sortOrder, armed, createdAt, updatedAt]
+      required: [id, ticker, column, targetPrice, sortOrder, armed, status, createdAt, updatedAt]
       properties:
         id: { type: string, format: uuid }
         ticker: { type: string }

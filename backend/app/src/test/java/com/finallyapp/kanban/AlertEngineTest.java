@@ -32,6 +32,7 @@ class AlertEngineTest {
         cache = new PriceCache();
         repo = mock(KanbanRepository.class);
         workflow = mock(KanbanWorkflow.class);
+        org.mockito.Mockito.when(repo.markNotified(any(), any(), any())).thenReturn(true);
         engine = new AlertEngine(cache, repo, workflow);
         engine.register();
     }
@@ -69,13 +70,13 @@ class AlertEngineTest {
         cache.update("AAPL", 184.97);   // cross -> fire, card becomes NOTIFIED
         cache.update("AAPL", 184.50);   // still below -> no second fire
         verify(workflow, timeout(2000).times(1)).targetPriceHit(eq(new KanbanCardRef(id, "AAPL", KanbanColumn.SUPPORT, d("185"), "user-1")), eq(d("184.97")));
-        verify(repo, timeout(2000)).setArmed(id, false);
+        verify(repo, timeout(2000)).markNotified(id, KanbanColumn.SUPPORT, d("185"));
 
         cache.update("AAPL", 186);      // back above: stays NOTIFIED (no re-arm)
         cache.update("AAPL", 185);      // hit again: no second notification
         cache.update("AAPL", 180);
         verify(workflow, afterDelay().times(1)).targetPriceHit(any(), any());
-        verify(repo, never()).setArmed(id, true);
+        verify(repo, times(1)).markNotified(any(), any(), any());
     }
 
     @Test
@@ -112,13 +113,33 @@ class AlertEngineTest {
     }
 
     @Test
+    void hitIsDroppedWhenAnEditCommittedFirst() {
+        // the card was edited / moved / deleted between the tick and the dispatcher: the DB compare-and-set fails
+        UUID id = UUID.randomUUID();
+        org.mockito.Mockito.when(repo.markNotified(eq(id), any(), any())).thenReturn(false);
+        engine.put(id, "user-1", "AAPL", KanbanColumn.SUPPORT, d("185"), true);
+        cache.update("AAPL", 180);
+        verify(repo, timeout(2000)).markNotified(id, KanbanColumn.SUPPORT, d("185"));
+        verify(workflow, after()).targetPriceHit(any(), any());
+    }
+
+    @Test
+    void hitIsStillNotifiedWhenTheDbIsDown() {
+        UUID id = UUID.randomUUID();
+        org.mockito.Mockito.when(repo.markNotified(eq(id), any(), any())).thenThrow(new RuntimeException("db down"));
+        engine.put(id, "user-1", "AAPL", KanbanColumn.SUPPORT, d("185"), true);
+        cache.update("AAPL", 180);
+        verify(workflow, timeout(2000)).targetPriceHit(any(), eq(d("180.00")));
+    }
+
+    @Test
     void removedCardNeverFires() {
         UUID id = UUID.randomUUID();
         engine.put(id, "user-1", "AAPL", KanbanColumn.SUPPORT, d("185"), true);
         engine.remove(id);
         cache.update("AAPL", 100);
         verify(workflow, after()).targetPriceHit(any(), any());
-        verify(repo, never()).setArmed(any(), org.mockito.ArgumentMatchers.anyBoolean());
+        verify(repo, never()).markNotified(any(), any(), any());
     }
 
     @Test

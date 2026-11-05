@@ -1,7 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { Observable, forkJoin, of, tap } from 'rxjs';
 import { ApiClient } from '../api/api-client';
-import { KanbanCard, KanbanCardUpdate, KanbanColumn } from '../api/models';
+import { KanbanCard, KanbanCardStatus, KanbanCardUpdate, KanbanColumn } from '../api/models';
 
 /** Same limit as the backend (kanban_cards.comment). */
 export const MAX_CARD_COMMENT = 500;
@@ -17,6 +17,20 @@ export function validateTargetPrice(raw: string | number | null | undefined): Pr
   if (!Number.isFinite(value)) return { ok: false, error: 'Not a number' };
   if (value <= 0) return { ok: false, error: 'Price must be > 0' };
   return { ok: true, value: Math.round(value * 10000) / 10000 };
+}
+
+/**
+ * Target price as shown in an editable field: 2 decimals, or up to the 4 the backend stores when the target
+ * has more (185.1234 stays 185.1234), so focusing and leaving the field never changes the target by rounding.
+ */
+export function formatTarget(target: number): string {
+  const two = target.toFixed(2);
+  return Number(two) === target ? two : String(Number(target.toFixed(4)));
+}
+
+/** ACTIVE / NOTIFIED of a card: one rule for the Portfolio board and the Alerts tables. */
+export function cardStatus(card: KanbanCard): KanbanCardStatus {
+  return card.status;
 }
 
 /**
@@ -49,6 +63,19 @@ export function sortByDistance(cards: readonly KanbanCard[], priceOf: (card: Kan
     .map((x) => x.card);
 }
 
+/**
+ * `sorted` re-ordered as last shown (`shownIds`), new cards appended: used while a card field is being edited,
+ * because moving the edited row in the DOM would blur its input and save a half-typed value.
+ */
+export function keepShownOrder(shownIds: readonly string[], sorted: readonly KanbanCard[]): KanbanCard[] {
+  const byId = new Map(sorted.map((c) => [c.id, c]));
+  const shown = new Set(shownIds);
+  return [
+    ...shownIds.filter((id) => byId.has(id)).map((id) => byId.get(id)!),
+    ...sorted.filter((c) => !shown.has(c.id)),
+  ];
+}
+
 function sortCards(cards: KanbanCard[]): KanbanCard[] {
   return [...cards].sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt));
 }
@@ -61,13 +88,24 @@ export class KanbanService {
   readonly support = computed(() => sortCards(this.cards().filter((c) => c.column === 'SUPPORT')));
   readonly resistance = computed(() => sortCards(this.cards().filter((c) => c.column === 'RESISTANCE')));
 
+  /** When the cards were last loaded (epoch ms), 0 = never. */
+  private loadedAt = 0;
+
   load(): void {
     this.api.getKanbanCards().subscribe({
-      next: (cards) => this.cards.set(cards),
+      next: (cards) => {
+        this.loadedAt = Date.now();
+        this.cards.set(cards);
+      },
       error: () => {
         /* keep current state */
       },
     });
+  }
+
+  /** Loads only when the last load is older than `maxAgeMs` (e.g. a page opened right after the app loaded them). */
+  refresh(maxAgeMs: number): void {
+    if (Date.now() - this.loadedAt >= maxAgeMs) this.load();
   }
 
   create(ticker: string, column: KanbanColumn, targetPrice: number, comment?: string | null): Observable<KanbanCard> {
@@ -99,7 +137,10 @@ export class KanbanService {
   updateTargetPrice(card: KanbanCard, raw: string | number): Observable<KanbanCard> | PriceValidation {
     const v = validateTargetPrice(raw);
     if (!v.ok) return v;
-    if (v.value === card.targetPrice) return v;
+    // unchanged: same value, or exactly the text the field showed (never re-arms a NOTIFIED card by accident)
+    if (v.value === card.targetPrice || String(raw).trim() === formatTarget(card.targetPrice)) {
+      return { ok: true, value: card.targetPrice };
+    }
     return this.update(card.id, { targetPrice: v.value });
   }
 

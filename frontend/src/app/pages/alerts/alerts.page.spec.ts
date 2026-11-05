@@ -78,7 +78,7 @@ describe('AlertsPage', () => {
       { ticker: 'MSFT', column: 'RESISTANCE', targetPrice: 600, comment: 'earnings week' },
     ]);
     cardPosts.forEach((r, i) =>
-      r.flush({ id: 'k' + i, ...r.request.body, sortOrder: i, armed: true, createdAt: '2026-11-03T10:00:00Z', updatedAt: '2026-11-03T10:00:00Z' },
+      r.flush({ id: 'k' + i, ...r.request.body, sortOrder: i, armed: true, status: 'ACTIVE', createdAt: '2026-11-03T10:00:00Z', updatedAt: '2026-11-03T10:00:00Z' },
         { status: 201, statusText: 'Created' }));
     await fixture.whenStable();
     expect(q(root, 'target-table-SUPPORT')!.textContent).toContain('MSFT');

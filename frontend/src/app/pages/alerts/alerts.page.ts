@@ -177,7 +177,8 @@ export class AlertsPage implements OnInit {
 
   ngOnInit(): void {
     this.alerts.load();
-    this.kanban.load();
+    // the app already loads the cards at startup: reload on open only if that copy is older than one refresh
+    this.kanban.refresh(REFRESH_MS);
     // refresh day high/low, volume and RSI of all three tables while the page is open (live prices come from the stream)
     const timer = setInterval(() => {
       this.alerts.load();

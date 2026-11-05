@@ -231,8 +231,11 @@
 
     <!--
       Live price reached the target (non-interrupting). The card notifies ONCE: the first hit sets the process
-      variable status = "NOTIFIED" before any notification runs; later hits end at "Duplicate ignored". Only an
-      explicit change by the user (target edited / card moved, see EventSub_CardMoved) sets status back to "ACTIVE".
+      variable status = "NOTIFIED" (plus notifiedColumn / notifiedTargetPrice) before any notification runs; a
+      later hit for the same column + target ends at "Duplicate ignored". Only an explicit change by the user
+      (target edited / card moved, see EventSub_CardMoved) sets status back to "ACTIVE". The message carries the
+      card's current column and targetPrice (the app is the source of truth), so a hit for a new target still
+      notifies even if the card-moved message for that edit never reached Camunda.
     -->
     <bpmn:subProcess id="EventSub_TargetPriceHit" name="Target price hit" triggeredByEvent="true">
       <bpmn:startEvent id="StartEvent_TargetPriceHit" name="target-price-hit" isInterrupting="false">
@@ -253,6 +256,11 @@
       <bpmn:scriptTask id="Task_SetStatusNotified" name="Status: NOTIFIED">
         <bpmn:extensionElements>
           <zeebe:script expression="=&#34;NOTIFIED&#34;" resultVariable="status" />
+          <zeebe:ioMapping>
+            <zeebe:output source="=status" target="status" />
+            <zeebe:output source="=column" target="notifiedColumn" />
+            <zeebe:output source="=targetPrice" target="notifiedTargetPrice" />
+          </zeebe:ioMapping>
         </bpmn:extensionElements>
         <bpmn:incoming>Flow_NotYetNotified</bpmn:incoming>
         <bpmn:outgoing>Flow_TargetHitToNotify</bpmn:outgoing>
@@ -308,7 +316,7 @@
       </bpmn:endEvent>
       <bpmn:sequenceFlow id="Flow_TargetHitToCheck" sourceRef="StartEvent_TargetPriceHit" targetRef="Gateway_AlreadyNotified" />
       <bpmn:sequenceFlow id="Flow_AlreadyNotified" name="NOTIFIED" sourceRef="Gateway_AlreadyNotified" targetRef="EndEvent_DuplicateIgnored">
-        <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=is defined(status) and status = "NOTIFIED"</bpmn:conditionExpression>
+        <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=is defined(status) and status = "NOTIFIED" and is defined(notifiedColumn) and notifiedColumn = column and notifiedTargetPrice = targetPrice</bpmn:conditionExpression>
       </bpmn:sequenceFlow>
       <bpmn:sequenceFlow id="Flow_NotYetNotified" name="ACTIVE" sourceRef="Gateway_AlreadyNotified" targetRef="Task_SetStatusNotified" />
       <bpmn:sequenceFlow id="Flow_TargetHitToNotify" sourceRef="Task_SetStatusNotified" targetRef="Task_NotifyTargetHit" />

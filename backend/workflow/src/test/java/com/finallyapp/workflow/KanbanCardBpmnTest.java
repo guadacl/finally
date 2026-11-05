@@ -16,6 +16,8 @@ import io.camunda.zeebe.model.bpmn.instance.StartEvent;
 import io.camunda.zeebe.model.bpmn.instance.SubProcess;
 import io.camunda.zeebe.model.bpmn.instance.bpmndi.BpmnShape;
 import io.camunda.zeebe.model.bpmn.instance.zeebe.ZeebeHeader;
+import io.camunda.zeebe.model.bpmn.instance.zeebe.ZeebeIoMapping;
+import io.camunda.zeebe.model.bpmn.instance.zeebe.ZeebeOutput;
 import io.camunda.zeebe.model.bpmn.instance.zeebe.ZeebeScript;
 import io.camunda.zeebe.model.bpmn.instance.zeebe.ZeebeSubscription;
 import io.camunda.zeebe.model.bpmn.instance.zeebe.ZeebeTaskDefinition;
@@ -140,11 +142,12 @@ class KanbanCardBpmnTest {
         assertThat(check.getId()).isEqualTo("Gateway_AlreadyNotified");
         assertThat(check).isInstanceOf(ExclusiveGateway.class);
 
-        // already NOTIFIED -> end without any notification
+        // already NOTIFIED for this same column + target -> end without any notification
         SequenceFlow duplicate = model.getModelElementById("Flow_AlreadyNotified");
         assertThat(duplicate.getSource()).isSameAs(check);
         assertThat(duplicate.getConditionExpression().getTextContent())
-                .isEqualTo("=is defined(status) and status = \"NOTIFIED\"");
+                .isEqualTo("=is defined(status) and status = \"NOTIFIED\" and is defined(notifiedColumn)"
+                        + " and notifiedColumn = column and notifiedTargetPrice = targetPrice");
         assertThat(duplicate.getTarget().getId()).isEqualTo("EndEvent_DuplicateIgnored");
         assertThat(duplicate.getTarget().getOutgoing()).isEmpty();
 
@@ -155,6 +158,14 @@ class KanbanCardBpmnTest {
         ZeebeScript s = script("Task_SetStatusNotified");
         assertThat(s.getResultVariable()).isEqualTo(KanbanProcess.VAR_STATUS);
         assertThat(s.getExpression()).isEqualTo("=\"" + KanbanProcess.STATUS_NOTIFIED + "\"");
+        // ...and remember which column + target it notified
+        ScriptTask task = model.getModelElementById("Task_SetStatusNotified");
+        assertThat(task.getSingleExtensionElement(ZeebeIoMapping.class).getOutputs())
+                .extracting(ZeebeOutput::getSource, ZeebeOutput::getTarget)
+                .containsExactlyInAnyOrder(
+                        org.assertj.core.groups.Tuple.tuple("=status", KanbanProcess.VAR_STATUS),
+                        org.assertj.core.groups.Tuple.tuple("=column", KanbanProcess.VAR_NOTIFIED_COLUMN),
+                        org.assertj.core.groups.Tuple.tuple("=targetPrice", KanbanProcess.VAR_NOTIFIED_TARGET));
 
         assertThat(single(setNotified).getId()).isEqualTo("Task_NotifyTargetHit");
         assertToastThenParallelEmailAndSms("Task_NotifyTargetHit", "Task_EmailTargetHit", "Task_SmsTargetHit",

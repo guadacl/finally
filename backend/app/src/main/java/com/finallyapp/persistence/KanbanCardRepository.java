@@ -1,9 +1,12 @@
 package com.finallyapp.persistence;
 
+import jakarta.persistence.LockModeType;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -19,14 +22,22 @@ public interface KanbanCardRepository extends JpaRepository<KanbanCardEntity, UU
 
     Optional<KanbanCardEntity> findByIdAndUserId(UUID id, String userId);
 
+    /** Same, with a row lock (SELECT ... FOR UPDATE) held until the calling transaction ends. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    Optional<KanbanCardEntity> findForUpdateByIdAndUserId(UUID id, String userId);
+
     @Query("select coalesce(max(c.sortOrder) + 1, 0) from KanbanCardEntity c where c.userId = :userId and c.column = :column")
     int nextSortOrder(@Param("userId") String userId, @Param("column") String column);
 
-    /** Sets the alert state of any user's card (called by the alert engine); returns the number of changed rows. */
+    /**
+     * Alert engine, compare-and-set: marks any user's card NOTIFIED only if it is still ACTIVE with the column and
+     * target that were hit (an edit committed meanwhile wins); returns the number of changed rows (0 or 1).
+     */
     @Modifying
     @Transactional
-    @Query("update KanbanCardEntity c set c.armed = :armed where c.id = :id and c.armed <> :armed")
-    int updateArmed(@Param("id") UUID id, @Param("armed") boolean armed);
+    @Query("update KanbanCardEntity c set c.armed = false where c.id = :id and c.armed = true "
+            + "and c.column = :column and c.targetPrice = :target")
+    int markNotified(@Param("id") UUID id, @Param("column") String column, @Param("target") BigDecimal target);
 
     @Modifying
     @Transactional

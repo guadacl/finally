@@ -3,7 +3,16 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { isObservable } from 'rxjs';
 import { KanbanCard } from '../api/models';
-import { KanbanService, cardDistance, sortByDistance, targetHint, validateTargetPrice } from './kanban.service';
+import {
+  KanbanService,
+  cardDistance,
+  cardStatus,
+  formatTarget,
+  keepShownOrder,
+  sortByDistance,
+  targetHint,
+  validateTargetPrice,
+} from './kanban.service';
 
 const card = (id: string, column: KanbanCard['column'], sortOrder: number, targetPrice = 100): KanbanCard => ({
   id,
@@ -12,6 +21,7 @@ const card = (id: string, column: KanbanCard['column'], sortOrder: number, targe
   targetPrice,
   sortOrder,
   armed: true,
+  status: 'ACTIVE',
   createdAt: `2026-11-02T10:00:0${sortOrder}Z`,
   updatedAt: '2026-11-02T10:00:00Z',
 });
@@ -58,6 +68,25 @@ describe('sortByDistance', () => {
     const ids = sortByDistance(cards, (c) => prices[c.id]).map((c) => c.id);
     expect(ids).toEqual(['f', 'a', 'd', 'e', 'b', 'c']); // 2%, 5%, 5% (tie, saved order), 20%, 30%, no price
   });
+
+  it('keepShownOrder keeps the shown order while editing, drops deleted cards and appends new ones', () => {
+    const sorted = [card('b', 'SUPPORT', 0), card('n', 'SUPPORT', 1), card('a', 'SUPPORT', 2)];
+    expect(keepShownOrder(['a', 'x', 'b'], sorted).map((c) => c.id)).toEqual(['a', 'b', 'n']);
+  });
+});
+
+describe('card display helpers', () => {
+  it('formatTarget shows 2 decimals, or up to 4 when the stored target has more', () => {
+    expect(formatTarget(185)).toBe('185.00');
+    expect(formatTarget(185.5)).toBe('185.50');
+    expect(formatTarget(185.1234)).toBe('185.1234');
+    expect(formatTarget(185.125)).toBe('185.125');
+  });
+
+  it('cardStatus uses the server status', () => {
+    expect(cardStatus({ ...card('a', 'SUPPORT', 0), armed: false, status: 'NOTIFIED' })).toBe('NOTIFIED');
+    expect(cardStatus(card('a', 'SUPPORT', 0))).toBe('ACTIVE');
+  });
 });
 
 describe('KanbanService', () => {
@@ -103,6 +132,27 @@ describe('KanbanService', () => {
     expect(req.request.body).toEqual({ targetPrice: 95.25 });
     req.flush({ ...c, targetPrice: 95.25 });
     expect(service.cards()[0].targetPrice).toBe(95.25);
+  });
+
+  it('never re-saves a 4-decimal target just because its field was focused and left', () => {
+    const c = card('a', 'SUPPORT', 0, 185.1234);
+    service.cards.set([c]);
+    expect(isObservable(service.updateTargetPrice(c, formatTarget(c.targetPrice)))).toBe(false);
+    expect(isObservable(service.updateTargetPrice(c, '185.1234'))).toBe(false);
+    // a real edit is still saved
+    const res = service.updateTargetPrice(c, '185.12');
+    expect(isObservable(res)).toBe(true);
+    if (isObservable(res)) res.subscribe();
+    http.expectOne({ method: 'PATCH', url: '/api/kanban/a' }).flush({ ...c, targetPrice: 185.12 });
+  });
+
+  it('refresh() loads only when the last load is older than maxAge', () => {
+    service.refresh(30_000); // never loaded
+    http.expectOne('/api/kanban').flush([]);
+    service.refresh(30_000); // just loaded
+    http.expectNone('/api/kanban');
+    service.refresh(0);
+    http.expectOne('/api/kanban').flush([]);
   });
 
   it('moves a card across columns with column + sortOrder PATCHes', () => {

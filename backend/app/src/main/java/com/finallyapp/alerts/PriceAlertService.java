@@ -5,10 +5,7 @@ import com.finallyapp.api.model.PriceAlertCreate;
 import com.finallyapp.config.Tickers;
 import com.finallyapp.error.ApiException;
 import com.finallyapp.error.ErrorCodes;
-import com.finallyapp.market.DailyCloses;
-import com.finallyapp.market.DayRangeCache;
-import com.finallyapp.market.LastSessionVolumes;
-import com.finallyapp.market.PriceCache;
+import com.finallyapp.market.MarketStats;
 import com.finallyapp.market.TickerTracker;
 import com.finallyapp.persistence.PriceAlertEntity;
 import com.finallyapp.persistence.PriceAlertRepository;
@@ -17,7 +14,9 @@ import com.finallyapp.security.CurrentUser;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
@@ -41,27 +40,21 @@ public class PriceAlertService {
 
     private final PriceAlertRepository alerts;
     private final WatchlistRepository watchlist;
-    private final PriceCache cache;
     private final TickerTracker tracker;
-    private final DayRangeCache dayRanges;
-    private final LastSessionVolumes volumes;
-    private final DailyCloses dailyCloses;
+    private final MarketStats stats;
 
-    public PriceAlertService(PriceAlertRepository alerts, WatchlistRepository watchlist, PriceCache cache,
-                             TickerTracker tracker, DayRangeCache dayRanges, LastSessionVolumes volumes,
-                             DailyCloses dailyCloses) {
+    public PriceAlertService(PriceAlertRepository alerts, WatchlistRepository watchlist, TickerTracker tracker,
+                             MarketStats stats) {
         this.alerts = alerts;
         this.watchlist = watchlist;
-        this.cache = cache;
         this.tracker = tracker;
-        this.dayRanges = dayRanges;
-        this.volumes = volumes;
-        this.dailyCloses = dailyCloses;
+        this.stats = stats;
     }
 
     public List<PriceAlert> list() {
+        Map<String, MarketStats.Stats> statsByTicker = new HashMap<>();
         return alerts.findByUserIdOrderByCreatedAtAscIdAsc(CurrentUser.id()).stream()
-                .map(PriceAlertService::row).map(this::toDto).toList();
+                .map(PriceAlertService::row).map(r -> toDto(r, statsByTicker)).toList();
     }
 
     /** 400 when the ticker is not on the user's watchlist or the limits/comment are invalid. */
@@ -74,7 +67,7 @@ public class PriceAlertService {
         }
         Row row = row(alerts.save(new PriceAlertEntity(user, a.ticker(), a.upper(), a.lower(), a.comment())));
         tracker.track(row.ticker());
-        return toDto(row);
+        return toDto(row, new HashMap<>());
     }
 
     public void delete(UUID id) {
@@ -123,18 +116,19 @@ public class PriceAlertService {
         return scaled;
     }
 
-    private PriceAlert toDto(Row r) {
-        BigDecimal price = cache.price(r.ticker());
-        PriceAlert dto = new PriceAlert(r.id(), r.ticker(), r.createdAt())
+    /** {@code statsByTicker} memoizes the market columns, so a list computes each ticker's RSI only once. */
+    private PriceAlert toDto(Row r, Map<String, MarketStats.Stats> statsByTicker) {
+        MarketStats.Stats s = statsByTicker.computeIfAbsent(r.ticker(), stats::of);
+        return new PriceAlert(r.id(), r.ticker(), r.createdAt())
                 .upperLimit(strip(r.upper()))
                 .lowerLimit(strip(r.lower()))
                 .comment(r.comment())
-                .currentPrice(price);
-        dayRanges.get(r.ticker()).ifPresent(d -> dto.dayHigh(d.high()).dayLow(d.low()));
-        volumes.get(r.ticker()).ifPresent(v -> dto.lastSessionVolume(v.volume()).lastSessionDate(v.session()));
-        dailyCloses.rsi(r.ticker(), price)
-                .ifPresent(v -> dto.rsi(BigDecimal.valueOf(v).setScale(1, RoundingMode.HALF_UP)));
-        return dto;
+                .currentPrice(s.price())
+                .dayHigh(s.dayHigh())
+                .dayLow(s.dayLow())
+                .lastSessionVolume(s.lastSessionVolume())
+                .lastSessionDate(s.lastSessionDate())
+                .rsi(s.rsi());
     }
 
     private static BigDecimal strip(BigDecimal v) {

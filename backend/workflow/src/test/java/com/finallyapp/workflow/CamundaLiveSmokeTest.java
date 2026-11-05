@@ -61,20 +61,32 @@ class CamundaLiveSmokeTest {
                 Thread.sleep(2000); // give a (wrong) second notification the chance to arrive
                 assertThat(received).hasSize(2);
 
+                // the target was edited to 175 while Camunda was down (card-moved lost): the app's hit for the new
+                // target carries it and notifies despite the stale NOTIFIED; a repeat of that same hit is ignored
+                for (double price : new double[] {174.9, 174.5}) {
+                    client.newCorrelateMessageCommand().messageName(KanbanProcess.MSG_TARGET_PRICE_HIT)
+                            .correlationKey(cardId)
+                            .variables(Map.of("price", price, "column", "SUPPORT", "targetPrice", 175)).send().join();
+                }
+                await().atMost(Duration.ofSeconds(20)).until(() -> received.size() == 3);
+                Thread.sleep(2000);
+                assertThat(received).hasSize(3);
+
                 // moving the card re-activates it: the next hit notifies again with the updated column/target
                 client.newCorrelateMessageCommand().messageName(KanbanProcess.MSG_CARD_MOVED).correlationKey(cardId)
                         .variables(Map.of("column", "RESISTANCE", "targetPrice", 200)).send().join();
-                await().atMost(Duration.ofSeconds(20)).until(() -> received.size() == 3);
+                await().atMost(Duration.ofSeconds(20)).until(() -> received.size() == 4);
                 client.newCorrelateMessageCommand().messageName(KanbanProcess.MSG_TARGET_PRICE_HIT)
                         .correlationKey(cardId).variables(Map.of("price", 200.25)).send().join();
-                await().atMost(Duration.ofSeconds(20)).until(() -> received.size() == 4);
+                await().atMost(Duration.ofSeconds(20)).until(() -> received.size() == 5);
 
                 assertThat(received).extracting(Notification::type).containsExactly(
-                        NotificationType.CARD_CREATED, NotificationType.TARGET_HIT,
+                        NotificationType.CARD_CREATED, NotificationType.TARGET_HIT, NotificationType.TARGET_HIT,
                         NotificationType.CARD_MOVED, NotificationType.TARGET_HIT);
                 assertThat(received).extracting(Notification::message).containsExactly(
                         "New Support card: AAPL @ 185.00",
                         "AAPL hit support 185.00 (now 184.97)",
+                        "AAPL hit support 175.00 (now 174.90)",
                         "AAPL moved to Resistance @ 200.00",
                         "AAPL hit resistance 200.00 (now 200.25)");
 

@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, signal } from '@angular/core';
 import { isObservable } from 'rxjs';
 import { KanbanCard, errorMessage } from '../../api/models';
-import { KanbanService, MAX_CARD_COMMENT, cardDistance, targetHint } from '../../core/kanban.service';
+import { KanbanService, MAX_CARD_COMMENT, cardDistance, cardStatus, formatTarget, targetHint } from '../../core/kanban.service';
 import { PriceStreamService } from '../../core/price-stream.service';
 import { PctPipe, PricePipe } from '../../shared/format';
 import { PriceFlashDirective } from '../../shared/price-flash.directive';
@@ -12,7 +12,7 @@ import { PriceFlashDirective } from '../../shared/price-flash.directive';
   imports: [PricePipe, PctPipe, PriceFlashDirective],
   host: {
     '[attr.data-testid]': "'kanban-card-' + card().id",
-    '[attr.data-armed]': 'card().armed',
+    '[attr.data-armed]': '!notified()',
     '[attr.data-broken]': 'broken()',
     '[attr.title]': "broken() ? 'Price is above this resistance target' : null",
     class: 'block rounded border border-edge bg-panel-2 px-2.5 py-2 shadow-sm shadow-black/20',
@@ -31,18 +31,18 @@ import { PriceFlashDirective } from '../../shared/price-flash.directive';
       <span class="text-sm font-bold tracking-wide">{{ card().ticker }}</span>
       <span
         class="ml-1"
-        [class]="card().armed ? 'text-accent' : 'text-muted/50'"
-        [attr.title]="card().armed ? 'Alert active: notifies once when the target is reached' : 'Notified — edit the target or move the card to re-arm'"
+        [class]="!notified() ? 'text-accent' : 'text-muted/50'"
+        [attr.title]="!notified() ? 'Alert active: notifies once when the target is reached' : 'Notified — edit the target or move the card to re-arm'"
         [attr.data-testid]="'kanban-card-armed-' + card().id"
       >
         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
           <path d="M12 22a2.5 2.5 0 0 0 2.45-2h-4.9A2.5 2.5 0 0 0 12 22Zm7-6V11a7 7 0 0 0-5.5-6.84V3.5a1.5 1.5 0 0 0-3 0v.66A7 7 0 0 0 5 11v5l-2 2v1h18v-1l-2-2Z" />
-          @if (!card().armed) {
+          @if (notified()) {
             <path d="M3 3l18 18" stroke="currentColor" stroke-width="2" />
           }
         </svg>
       </span>
-      @if (!card().armed) {
+      @if (notified()) {
         <span
           class="rounded border border-accent/60 bg-accent/10 px-1.5 py-px text-[9px] font-semibold tracking-widest text-accent uppercase"
           [attr.data-testid]="'kanban-card-status-' + card().id"
@@ -123,6 +123,8 @@ export class KanbanCardComponent {
   readonly busy = signal(false);
 
   readonly livePrice = computed(() => this.prices.state(this.card().ticker)()?.price ?? this.card().currentPrice ?? null);
+  /** Alert already sent (shared rule with the Alerts tables, see cardStatus). */
+  readonly notified = computed(() => cardStatus(this.card()) === 'NOTIFIED');
   readonly distance = computed(() => cardDistance(this.card().targetPrice, this.livePrice()));
   readonly hint = computed(() => targetHint(this.card().column, this.card().targetPrice, this.livePrice()));
   /** Resistance card whose target is below the current price (price has broken through it). */
@@ -140,7 +142,7 @@ export class KanbanCardComponent {
 
   constructor() {
     // Sync each editable field only when its own server value changes.
-    effect(() => this.draft.set(this.serverTarget().toFixed(2)));
+    effect(() => this.draft.set(formatTarget(this.serverTarget())));
     effect(() => this.commentDraft.set(this.serverComment()));
   }
 
@@ -174,7 +176,7 @@ export class KanbanCardComponent {
   }
 
   cancel(): void {
-    this.draft.set(this.card().targetPrice.toFixed(2));
+    this.draft.set(formatTarget(this.card().targetPrice));
     this.error.set(null);
   }
 
@@ -182,7 +184,7 @@ export class KanbanCardComponent {
     const result = this.kanban.updateTargetPrice(this.card(), this.draft());
     if (!isObservable(result)) {
       if (result.ok) {
-        this.draft.set(result.value.toFixed(2));
+        this.draft.set(formatTarget(result.value));
       } else {
         this.error.set(result.error);
       }

@@ -64,6 +64,36 @@ describe('TargetTableComponent', () => {
       'Comment', 'Added']);
   });
 
+  it('does not re-sort while a target is being edited (the row would lose focus and save a half-typed value)', () => {
+    const { fixture, root, q } = render('SUPPORT');
+    const order = () => Array.from(root.querySelectorAll('tbody tr[data-testid^="target-row-"]')).map((r) => r.getAttribute('data-testid'));
+    expect(order()).toEqual(['target-row-s2', 'target-row-s1']);
+    const input = q('target-price-s2') as HTMLInputElement;
+    input.dispatchEvent(new Event('focus'));
+    input.value = '18'; // half-typed
+    const prices = TestBed.inject(PriceStreamService);
+    prices.apply({ ticker: 'AAPL', price: 151, previousPrice: 200, timestamp: '2026-11-04T10:00:01Z', direction: 'down' }); // s1 now nearest
+    fixture.detectChanges();
+    expect(order()).toEqual(['target-row-s2', 'target-row-s1']);
+    expect(input.value).toBe('18');
+    // leaving the field saves and re-sorts
+    input.value = '480';
+    input.dispatchEvent(new Event('blur'));
+    http.expectOne({ method: 'PATCH', url: '/api/kanban/s2' }).flush(card('s2', 'SUPPORT', 'MSFT', 480));
+    fixture.detectChanges();
+    expect(order()).toEqual(['target-row-s1', 'target-row-s2']);
+  });
+
+  it('shows a 4-decimal target in full, so focus + blur does not change it', () => {
+    TestBed.inject(KanbanService).cards.update((list) => list.map((c) => (c.id === 's1' ? { ...c, targetPrice: 150.1234 } : c)));
+    const { q } = render('SUPPORT');
+    const input = q('target-price-s1') as HTMLInputElement;
+    expect(input.value).toBe('150.1234');
+    input.dispatchEvent(new Event('focus'));
+    input.dispatchEvent(new Event('blur'));
+    http.expectNone({ method: 'PATCH', url: '/api/kanban/s1' });
+  });
+
   it('shows only its column, nearest target first, with market data and status', () => {
     const { root, q } = render('SUPPORT');
     const rows = Array.from(root.querySelectorAll('tbody tr[data-testid^="target-row-"]')).map((r) => r.getAttribute('data-testid'));

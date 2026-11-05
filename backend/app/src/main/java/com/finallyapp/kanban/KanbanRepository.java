@@ -10,6 +10,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Kanban cards of the current user (plus the all-users view the alert engine needs), on top of the Spring Data JPA
@@ -54,12 +55,20 @@ public class KanbanRepository {
         return cards.nextSortOrder(CurrentUser.id(), column.name());
     }
 
-    public CardRow update(UUID id, KanbanColumn column, BigDecimal target, int sortOrder, boolean armed, String comment) {
-        KanbanCardEntity c = cards.findByIdAndUserId(id, CurrentUser.id()).orElseThrow();
+    /**
+     * Edits a card under a row lock, so it cannot interleave with the alert engine's {@link #markNotified}:
+     * {@code rearm} sets it ACTIVE; otherwise its armed state is left exactly as stored (a comment edit or a reorder
+     * never re-activates a NOTIFIED card, nor overwrites a NOTIFIED set meanwhile).
+     */
+    @Transactional
+    public CardRow update(UUID id, KanbanColumn column, BigDecimal target, int sortOrder, boolean rearm, String comment) {
+        KanbanCardEntity c = cards.findForUpdateByIdAndUserId(id, CurrentUser.id()).orElseThrow();
         c.setColumn(column.name());
         c.setTargetPrice(target);
         c.setSortOrder(sortOrder);
-        c.setArmed(armed);
+        if (rearm) {
+            c.setArmed(true);
+        }
         c.setComment(comment);
         return row(cards.saveAndFlush(c));
     }
@@ -68,9 +77,12 @@ public class KanbanRepository {
         cards.updateProcessInstanceKey(id, key);
     }
 
-    /** Alert engine: persists the armed flag of any user's card (no-op when unchanged). */
-    public void setArmed(UUID id, boolean armed) {
-        cards.updateArmed(id, armed);
+    /**
+     * Alert engine: marks any user's card NOTIFIED if it is still ACTIVE with this column and target. False when the
+     * card was deleted, edited or already NOTIFIED meanwhile; then the hit must not be notified.
+     */
+    public boolean markNotified(UUID id, KanbanColumn column, BigDecimal target) {
+        return cards.markNotified(id, column.name(), target) > 0;
     }
 
     public boolean delete(UUID id) {

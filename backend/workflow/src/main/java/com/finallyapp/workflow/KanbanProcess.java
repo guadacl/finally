@@ -40,6 +40,12 @@ public final class KanbanProcess {
      * Moving the card / editing the target sets it back to ACTIVE ({@code Task_SetStatusActive}).
      */
     public static final String VAR_STATUS = "status";
+    /**
+     * Column and target of the last notified hit (set with {@link #STATUS_NOTIFIED} by {@code Task_SetStatusNotified}).
+     * A hit is a duplicate only when the status is NOTIFIED <em>and</em> it carries this same column and target.
+     */
+    public static final String VAR_NOTIFIED_COLUMN = "notifiedColumn";
+    public static final String VAR_NOTIFIED_TARGET = "notifiedTargetPrice";
     public static final String STATUS_ACTIVE = "ACTIVE";
     public static final String STATUS_NOTIFIED = "NOTIFIED";
 

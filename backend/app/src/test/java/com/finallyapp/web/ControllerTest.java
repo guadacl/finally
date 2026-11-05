@@ -161,7 +161,8 @@ class ControllerTest {
     @Test
     void kanbanCrud() throws Exception {
         UUID id = UUID.randomUUID();
-        KanbanCard card = new KanbanCard(id, "AAPL", KanbanColumn.SUPPORT, new BigDecimal("185"), 0, true, NOW, NOW);
+        KanbanCard card = new KanbanCard(id, "AAPL", KanbanColumn.SUPPORT, new BigDecimal("185"), 0, true,
+                com.finallyapp.api.model.KanbanCardStatus.ACTIVE, NOW, NOW);
         when(kanban.create(any())).thenReturn(card);
         mvc.perform(post("/api/kanban").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"ticker\":\"AAPL\",\"column\":\"SUPPORT\",\"targetPrice\":185}"))

@@ -14,7 +14,9 @@ import com.finallyapp.market.MarketStats;
 import com.finallyapp.market.TickerTracker;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,7 +45,8 @@ public class KanbanService {
     }
 
     public List<KanbanCard> list() {
-        return repo.findAll().stream().map(this::toDto).toList();
+        Map<String, MarketStats.Stats> statsByTicker = new HashMap<>(); // one RSI computation per ticker
+        return repo.findAll().stream().map(r -> toDto(r, statsByTicker)).toList();
     }
 
     public KanbanCard create(KanbanCardCreate req) {
@@ -96,10 +99,10 @@ public class KanbanService {
         } else {
             sortOrder = cur.sortOrder();
         }
-        boolean armed = (columnChanged || targetChanged) || cur.armed();
-        CardRow row = repo.update(id, column, target, sortOrder, armed, comment);
+        boolean rearm = columnChanged || targetChanged;
+        CardRow row = repo.update(id, column, target, sortOrder, rearm, comment);
 
-        if (columnChanged || targetChanged) {
+        if (rearm) {
             alerts.put(row.id(), row.userId(), row.ticker(), row.column(), row.targetPrice(), row.armed());
             try {
                 workflow.cardMoved(ref(row));
@@ -166,13 +169,18 @@ public class KanbanService {
     }
 
     private KanbanCard toDto(CardRow r) {
+        return toDto(r, new HashMap<>());
+    }
+
+    private KanbanCard toDto(CardRow r, Map<String, MarketStats.Stats> statsByTicker) {
         KanbanCard c = new KanbanCard(r.id(), r.ticker(),
                 com.finallyapp.api.model.KanbanColumn.fromValue(r.column().name()),
-                r.targetPrice().stripTrailingZeros(), r.sortOrder(), r.armed(), r.createdAt(), r.updatedAt());
-        MarketStats.Stats s = stats.of(r.ticker());
+                r.targetPrice().stripTrailingZeros(), r.sortOrder(), r.armed(),
+                com.finallyapp.api.model.KanbanCardStatus.fromValue(AlertRules.status(r.armed()).name()),
+                r.createdAt(), r.updatedAt());
+        MarketStats.Stats s = statsByTicker.computeIfAbsent(r.ticker(), stats::of);
         c.setCurrentPrice(s.price());
         c.setComment(r.comment());
-        c.setStatus(com.finallyapp.api.model.KanbanCardStatus.fromValue(AlertRules.status(r.armed()).name()));
         c.setDayHigh(s.dayHigh());
         c.setDayLow(s.dayLow());
         c.setLastSessionVolume(s.lastSessionVolume());

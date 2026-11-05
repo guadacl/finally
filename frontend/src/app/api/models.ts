@@ -189,7 +189,7 @@ export interface KanbanCard {
   /** false once the alert fired (NOTIFIED); true again only after the target is edited or the card is moved */
   armed: boolean;
   /** ACTIVE until the target is first reached, then NOTIFIED (alert sent once). Mirrors the Camunda process. */
-  status?: KanbanCardStatus;
+  status: KanbanCardStatus;
   currentPrice?: number | null;
   /** Free-text note, editable on the card. */
   comment?: string | null;

@@ -15,6 +15,7 @@ const card: KanbanCard = {
   targetPrice: 185,
   sortOrder: 0,
   armed: false,
+  status: 'NOTIFIED',
   createdAt: '2026-11-02T10:00:00Z',
   updatedAt: '2026-11-02T10:00:00Z',
 };
@@ -88,7 +89,7 @@ describe('KanbanCardComponent', () => {
     input.dispatchEvent(new Event('blur'));
     const req = http.expectOne({ method: 'PATCH', url: '/api/kanban/c1' });
     expect(req.request.body).toEqual({ targetPrice: 180.5 });
-    req.flush({ ...card, targetPrice: 180.5, armed: true });
+    req.flush({ ...card, targetPrice: 180.5, armed: true, status: 'ACTIVE' });
     fixture.detectChanges();
     expect(TestBed.inject(KanbanService).cards()[0].armed).toBe(true);
   });
