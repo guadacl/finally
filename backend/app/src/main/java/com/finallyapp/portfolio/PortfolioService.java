@@ -9,6 +9,7 @@ import com.finallyapp.config.Tickers;
 import com.finallyapp.error.ApiException;
 import com.finallyapp.error.ErrorCodes;
 import com.finallyapp.market.PriceCache;
+import com.finallyapp.market.TickerNames;
 import com.finallyapp.market.TickerTracker;
 import com.finallyapp.portfolio.PortfolioMath.Fill;
 import com.finallyapp.portfolio.PortfolioMath.Holding;
@@ -39,8 +40,11 @@ public class PortfolioService {
     private final PriceCache cache;
     private final TickerTracker tracker;
     private final TransactionTemplate tx;
+    private final TickerNames names;
 
-    public PortfolioService(PortfolioRepository repo, PriceCache cache, TickerTracker tracker, TransactionTemplate tx) {
+    public PortfolioService(PortfolioRepository repo, PriceCache cache, TickerTracker tracker, TransactionTemplate tx,
+                            TickerNames names) {
+        this.names = names;
         this.repo = repo;
         this.cache = cache;
         this.tracker = tracker;
@@ -142,7 +146,7 @@ public class PortfolioService {
             BigDecimal mv = PortfolioMath.marketValue(r.quantity(), price);
             BigDecimal upnl = PortfolioMath.unrealizedPnl(r.quantity(), r.avgCost(), price);
             positions.add(new Position(r.ticker(), r.quantity().stripTrailingZeros(), r.avgCost(), price, mv, upnl,
-                    PortfolioMath.pnlPercent(r.avgCost(), price)));
+                    PortfolioMath.pnlPercent(r.avgCost(), price)).name(names.get(r.ticker()).orElse(null)));
             positionsValue = positionsValue.add(mv);
             pnl = pnl.add(upnl);
         }

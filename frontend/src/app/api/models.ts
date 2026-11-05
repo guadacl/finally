@@ -88,6 +88,8 @@ export interface TradeResult {
 
 export interface Position {
   ticker: string;
+  /** Company name, e.g. "Apple Inc." (null while unknown). */
+  name?: string | null;
   quantity: number;
   avgCost: number;
   currentPrice: number;

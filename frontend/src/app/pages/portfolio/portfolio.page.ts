@@ -4,6 +4,7 @@ import { PricePoint } from '../../core/price-stream.service';
 import { MoneyPipe, PctPipe, PricePipe, QtyPipe, signClass } from '../../shared/format';
 import { LineChartComponent } from '../../shared/line-chart.component';
 import { PriceFlashDirective } from '../../shared/price-flash.directive';
+import { SearchBoxComponent, matchesSearch } from '../../shared/search-box.component';
 import { HeatmapComponent } from './heatmap.component';
 import { KanbanBoardComponent } from './kanban-board.component';
 
@@ -21,6 +22,7 @@ const LIVE_SAMPLE_MS = 2000;
     PricePipe,
     QtyPipe,
     PriceFlashDirective,
+    SearchBoxComponent,
   ],
   host: { class: 'grid gap-2 grid-cols-1 xl:grid-cols-2 auto-rows-min' },
   template: `
@@ -52,15 +54,19 @@ const LIVE_SAMPLE_MS = 2000;
     <section class="panel flex max-h-[420px] flex-col overflow-hidden">
       <div class="panel-title">
         <span>Positions</span>
-        <span class="num normal-case tracking-normal">
-          Cash {{ portfolio.cash() | money }} · Invested {{ portfolio.positionsValue() | money }}
-        </span>
+        <div class="flex items-center gap-3">
+          <span class="num normal-case tracking-normal">
+            Cash {{ portfolio.cash() | money }} · Invested {{ portfolio.positionsValue() | money }}
+          </span>
+          <app-search-box [(query)]="search" testId="positions-search" />
+        </div>
       </div>
       <div class="min-h-0 flex-1 overflow-auto">
         <table class="grid-table" data-testid="positions-table">
           <thead>
             <tr>
               <th>Ticker</th>
+              <th>Name</th>
               <th class="!text-right">Qty</th>
               <th class="!text-right">Avg cost</th>
               <th class="!text-right">Price</th>
@@ -70,9 +76,10 @@ const LIVE_SAMPLE_MS = 2000;
             </tr>
           </thead>
           <tbody>
-            @for (p of portfolio.positions(); track p.ticker) {
+            @for (p of visiblePositions(); track p.ticker) {
               <tr [attr.data-testid]="'positions-row-' + p.ticker" class="hover:bg-panel-2">
                 <td class="font-semibold">{{ p.ticker }}</td>
+                <td class="max-w-48 truncate text-muted" [attr.title]="p.name ?? null" [attr.data-testid]="'positions-name-' + p.ticker">{{ p.name || '—' }}</td>
                 <td class="num text-right">{{ p.quantity | qty }}</td>
                 <td class="num text-right">{{ p.avgCost | price }}</td>
                 <td class="num text-right"><span class="rounded px-1" [appPriceFlash]="p.currentPrice">{{ p.currentPrice | price }}</span></td>
@@ -82,7 +89,13 @@ const LIVE_SAMPLE_MS = 2000;
               </tr>
             } @empty {
               <tr>
-                <td colspan="7" class="py-6 text-center text-muted">No open positions</td>
+                <td colspan="8" class="py-6 text-center text-muted">
+                  @if (search().trim() && portfolio.positions().length > 0) {
+                    <span data-testid="positions-no-match">No positions match "{{ search() }}"</span>
+                  } @else {
+                    No open positions
+                  }
+                </td>
               </tr>
             }
           </tbody>
@@ -102,6 +115,11 @@ const LIVE_SAMPLE_MS = 2000;
 export class PortfolioPage {
   readonly portfolio = inject(PortfolioService);
   readonly signClass = signClass;
+  /** Search text for the positions table (ticker or company name). */
+  readonly search = signal('');
+  readonly visiblePositions = computed(() =>
+    this.portfolio.positions().filter((p) => matchesSearch(this.search(), p.ticker, p.name)),
+  );
 
   /** Live total sampled every couple of seconds (appended to the snapshot history). */
   private readonly liveSample = signal<PricePoint | null>(null);

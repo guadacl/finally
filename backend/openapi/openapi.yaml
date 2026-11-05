@@ -419,6 +419,7 @@ components:
       required: [ticker, quantity, avgCost, currentPrice, marketValue, unrealizedPnl, unrealizedPnlPercent]
       properties:
         ticker: { type: string }
+        name: { type: string, nullable: true, description: 'Company name, e.g. "Apple Inc." (null while unknown)' }
         quantity: { type: number }
         avgCost: { type: number }
         currentPrice: { type: number }

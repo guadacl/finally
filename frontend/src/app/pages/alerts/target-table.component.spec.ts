@@ -79,6 +79,21 @@ describe('TargetTableComponent', () => {
     expect(q('target-name-s2')!.textContent!.trim()).toBe('—'); // name not known yet
   });
 
+  it('filters cards by ticker or company name from the search box', async () => {
+    const { fixture, root, q } = render('SUPPORT');
+    const rows = () => Array.from(root.querySelectorAll('tbody tr[data-testid^="target-row-"]')).map((r) => r.getAttribute('data-testid'));
+    const search = q('target-search-SUPPORT') as HTMLInputElement;
+    search.value = 'apple';
+    search.dispatchEvent(new Event('input'));
+    await fixture.whenStable();
+    expect(rows()).toEqual(['target-row-s1']);
+    search.value = 'xyz';
+    search.dispatchEvent(new Event('input'));
+    await fixture.whenStable();
+    expect(rows()).toEqual([]);
+    expect(q('target-no-match-SUPPORT')!.textContent).toContain('xyz');
+  });
+
   it('highlights a Resistance target below the current price', () => {
     const { q } = render('RESISTANCE');
     expect(q('target-row-r1')!.getAttribute('data-broken')).toBe('true');

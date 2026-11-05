@@ -10,6 +10,7 @@ import { TICKER_PATTERN, normalizeTicker } from '../../core/watchlist.service';
 import { PctPipe, PricePipe, VolumePipe } from '../../shared/format';
 import { PriceFlashDirective } from '../../shared/price-flash.directive';
 import { fmtRsi, rsiClass, rsiTitle } from '../../shared/rsi';
+import { SearchBoxComponent, matchesSearch } from '../../shared/search-box.component';
 
 /**
  * One Support or Resistance table on the Alerts page: the cards of one kanban column shown with the same market
@@ -19,7 +20,7 @@ import { fmtRsi, rsiClass, rsiTitle } from '../../shared/rsi';
 @Component({
   selector: 'app-target-table',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, DatePipe, PricePipe, PctPipe, VolumePipe, PriceFlashDirective],
+  imports: [FormsModule, DatePipe, PricePipe, PctPipe, VolumePipe, PriceFlashDirective, SearchBoxComponent],
   host: { class: 'block' },
   template: `
     <section class="panel flex h-full flex-col overflow-hidden" [attr.data-testid]="'target-table-' + column()">
@@ -33,6 +34,7 @@ import { fmtRsi, rsiClass, rsiTitle } from '../../shared/rsi';
         </span>
         <div class="flex items-center gap-3 normal-case tracking-normal">
           <span class="num">{{ rows().length }} {{ rows().length === 1 ? 'card' : 'cards' }} · notifies once · via Camunda</span>
+          <app-search-box [(query)]="search" [testId]="'target-search-' + column()" />
           <button
             type="button"
             class="btn btn-submit flex h-7 w-7 items-center justify-center p-0 text-lg leading-none"
@@ -103,7 +105,7 @@ import { fmtRsi, rsiClass, rsiTitle } from '../../shared/rsi';
               </tr>
             </thead>
             <tbody>
-              @for (c of rows(); track c.id) {
+              @for (c of visibleRows(); track c.id) {
                 <tr class="border-b border-edge/60 hover:bg-panel-2" [class.target-broken]="broken(c)"
                   [attr.data-testid]="'target-row-' + c.id" [attr.data-broken]="broken(c)" [attr.data-status]="statusOf(c)"
                   [attr.title]="broken(c) ? 'Price is above this resistance target' : null">
@@ -144,6 +146,12 @@ import { fmtRsi, rsiClass, rsiTitle } from '../../shared/rsi';
                 @if (rowError()[c.id]; as e) {
                   <tr><td colspan="13" class="px-3 pb-2 text-[11px] text-down" [attr.data-testid]="'target-error-' + c.id">{{ c.ticker }}: {{ e }}</td></tr>
                 }
+              } @empty {
+                <tr>
+                  <td colspan="13" class="px-3 py-4 text-center text-muted" [attr.data-testid]="'target-no-match-' + column()">
+                    No {{ label() }} targets match "{{ search() }}".
+                  </td>
+                </tr>
               }
             </tbody>
           </table>
@@ -179,6 +187,9 @@ export class TargetTableComponent {
   readonly rows = computed(() =>
     sortByDistance(this.isSupport() ? this.kanban.support() : this.kanban.resistance(), (c) => this.livePrice(c)),
   );
+  /** Search text for this table (ticker or company name). */
+  readonly search = signal('');
+  readonly visibleRows = computed(() => this.rows().filter((c) => matchesSearch(this.search(), c.ticker, c.name)));
 
   readonly formOpen = signal(false);
   readonly newTicker = signal('');

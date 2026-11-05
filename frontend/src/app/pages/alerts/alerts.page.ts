@@ -11,6 +11,7 @@ import { WatchlistService } from '../../core/watchlist.service';
 import { PricePipe, VolumePipe } from '../../shared/format';
 import { PriceFlashDirective } from '../../shared/price-flash.directive';
 import { rsiClass, rsiTitle } from '../../shared/rsi';
+import { SearchBoxComponent, matchesSearch } from '../../shared/search-box.component';
 import { TargetTableComponent } from './target-table.component';
 
 /** How often the list is reloaded for fresh day high/low, volume and RSI. */
@@ -28,7 +29,7 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
 @Component({
   selector: 'app-alerts-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, DatePipe, PricePipe, VolumePipe, PriceFlashDirective, TargetTableComponent],
+  imports: [FormsModule, RouterLink, DatePipe, PricePipe, VolumePipe, PriceFlashDirective, TargetTableComponent, SearchBoxComponent],
   host: { class: 'block h-full' },
   template: `
     <div class="mx-auto flex h-full max-w-[1500px] flex-col gap-2 overflow-auto">
@@ -37,6 +38,7 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
         <span>Price alerts</span>
         <div class="flex items-center gap-3 normal-case tracking-normal">
           <span class="num">{{ alerts.alerts().length }} alerts · prices stream live</span>
+          <app-search-box [(query)]="search" testId="alerts-search" />
           <button
             type="button"
             data-testid="alerts-add-button"
@@ -121,7 +123,7 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
               </tr>
             </thead>
             <tbody>
-              @for (a of alerts.alerts(); track a.id) {
+              @for (a of visibleAlerts(); track a.id) {
                 <tr class="border-b border-edge/60 hover:bg-panel-2" [attr.data-testid]="'alerts-row-' + a.id" [attr.data-status]="status(a)">
                   <td class="px-3 py-2 font-bold">{{ a.ticker }}</td>
                   <td class="max-w-56 truncate px-3 py-2 text-muted" [attr.title]="a.name ?? null" [attr.data-testid]="'alerts-name-' + a.id">{{ a.name || '—' }}</td>
@@ -141,6 +143,10 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
                   <td class="px-3 py-2 text-right">
                     <button type="button" class="text-muted hover:text-down" [attr.data-testid]="'alerts-delete-' + a.id" title="Delete alert" (click)="remove(a)">×</button>
                   </td>
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="13" class="px-3 py-4 text-center text-muted" data-testid="alerts-no-match">No alerts match "{{ search() }}".</td>
                 </tr>
               }
             </tbody>
@@ -175,6 +181,9 @@ export class AlertsPage implements OnInit {
   readonly error = signal<string | null>(null);
 
   readonly watchlistTickers = computed(() => this.watchlist.items().map((i) => i.ticker));
+  /** Search text for the price alerts table (ticker or company name). */
+  readonly search = signal('');
+  readonly visibleAlerts = computed(() => this.alerts.alerts().filter((a) => matchesSearch(this.search(), a.ticker, a.name)));
   readonly selectedPrice = computed(() => (this.ticker() ? this.prices.price(this.ticker()) : null));
 
   ngOnInit(): void {
