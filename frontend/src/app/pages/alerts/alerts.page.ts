@@ -54,7 +54,7 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
       </div>
 
       @if (formOpen()) {
-        <form class="grid gap-3 border-b border-edge bg-panel-2 p-3 md:grid-cols-[12rem_9rem_9rem_1fr_auto]" (ngSubmit)="save()" data-testid="alerts-form">
+        <form class="grid gap-3 border-b border-edge bg-panel-2 p-3 md:grid-cols-[18rem_9rem_9rem_1fr_auto]" (ngSubmit)="save()" data-testid="alerts-form">
           @if (watchlistTickers().length === 0) {
             <p class="text-sm text-muted md:col-span-5">
               Your watchlist is empty. <a routerLink="/watchlists" class="text-primary underline">Add stocks to your watchlist</a> first.
@@ -64,8 +64,8 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
               <span class="text-[10px] tracking-widest text-muted uppercase">Stock (from watchlist)</span>
               <select name="aTicker" data-testid="alerts-ticker" class="field" [ngModel]="ticker()" (ngModelChange)="ticker.set($event); error.set(null)">
                 <option value="" disabled>Choose a stock…</option>
-                @for (t of watchlistTickers(); track t) {
-                  <option [value]="t">{{ t }}</option>
+                @for (s of watchlistStocks(); track s.ticker) {
+                  <option [value]="s.ticker" [attr.title]="s.name ?? null">{{ s.name ? s.ticker + ' — ' + s.name : s.ticker }}</option>
                 }
               </select>
               <span class="num h-4 text-[11px] text-muted">
@@ -184,6 +184,8 @@ export class AlertsPage implements OnInit {
   readonly error = signal<string | null>(null);
 
   readonly watchlistTickers = computed(() => this.watchlist.items().map((i) => i.ticker));
+  /** Dropdown options: ticker plus company name when known ("ENPH — Enphase Energy, Inc."). */
+  readonly watchlistStocks = computed(() => this.watchlist.items().map((i) => ({ ticker: i.ticker, name: i.name ?? null })));
   hasAlert(ticker: string): boolean {
     return this.alerts.alerts().some((a) => a.ticker === ticker);
   }
