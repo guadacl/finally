@@ -33,7 +33,7 @@ import { PricePipe, QtyPipe } from '../shared/format';
         <div class="flex items-center justify-between border-b border-edge px-3 py-2">
           <div class="flex items-center gap-2">
             <span class="h-2 w-2 rounded-full bg-accent"></span>
-            <span class="text-xs font-semibold tracking-widest uppercase">FinAlly Copilot</span>
+            <span class="text-xs font-semibold tracking-widest uppercase">Tradex Copilot</span>
           </div>
           <button
             type="button"
@@ -122,7 +122,7 @@ import { PricePipe, QtyPipe } from '../shared/format';
             name="chatInput"
             data-testid="chat-input"
             class="field min-w-0 flex-1"
-            placeholder="Ask FinAlly…"
+            placeholder="Ask Tradex…"
             autocomplete="off"
             maxlength="4000"
             [ngModel]="draft()"

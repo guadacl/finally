@@ -1,10 +1,10 @@
-# FinAlly — AI Trading Workstation
+# Tradex — AI Trading Workstation
 
 ## Project Specification
 
 ## 1. Vision
 
-FinAlly (Finance Ally) is a visually stunning AI-powered trading workstation that streams live market data, lets users trade a simulated portfolio, and integrates an LLM chat assistant that can analyze positions and execute trades on the user's behalf. It looks and feels like a modern Bloomberg terminal with an AI copilot.
+Tradex is a visually stunning AI-powered trading workstation that streams live market data, lets users trade a simulated portfolio, and integrates an LLM chat assistant that can analyze positions and execute trades on the user's behalf. It looks and feels like a modern Bloomberg terminal with an AI copilot.
 
 
 This is the capstone project for an agentic AI coding course. It is built entirely by Coding Agents demonstrating how orchestrated AI agents can produce a production-quality full-stack application. Agents interact through files in `planning/`.
@@ -15,7 +15,7 @@ This is the capstone project for an agentic AI coding course. It is built entire
 
 The user runs a single Docker command (or a provided start script). A browser opens to `http://localhost:8000` and is sent to the **Keycloak login page**, where they log in or **register** a new account (see `planning/CONTRACTS.md` §11). Each account has its own portfolio, watchlist, kanban board and chat.
 
-**Login page**: a custom FinAlly-styled page (Keycloak login theme `finally`, `keycloak/themes/finally/login`) in the dark trading-terminal look: yellow "F" logo, username/email + password, "remember me", "Forgot password?", a purple **Sign in** button, **"or continue with" Google / Facebook** buttons, and "New to FinAlly? Create account". Google and Facebook use Keycloak identity brokering and appear only when their OAuth client ID/secret are configured (`keycloak/README.md`); a social login whose email matches an existing account links to it after the user confirms that account's password. All login logic (passwords, reset, registration, social flow) stays in Keycloak; the theme only changes CSS and texts.
+**Login page**: a custom Tradex-styled page (Keycloak login theme `finally`, `keycloak/themes/finally/login`) in the dark trading-terminal look: yellow "T" logo, username/email + password, "remember me", "Forgot password?", a purple **Sign in** button, **"or continue with" Google / Facebook** buttons, and "New to Tradex? Create account". Google and Facebook use Keycloak identity brokering and appear only when their OAuth client ID/secret are configured (`keycloak/README.md`); a social login whose email matches an existing account links to it after the user confirms that account's password. All login logic (passwords, reset, registration, social flow) stays in Keycloak; the theme only changes CSS and texts.
 
 After logging in they see:
 
@@ -103,7 +103,7 @@ The whole stack is started with a single `docker compose up`. The browser only t
 | `app` | Spring Boot: REST + SSE, market data, AI chat, Camunda job workers (`finally-notify`, `email-notify`), serves the Angular build |
 | `postgres` | Postgres 16 (Flyway migrations V1–V5) |
 | `camunda` + `camunda-elasticsearch` | Camunda 8.8 with Operate/Tasklist; runs the `kanban-card` BPMN |
-| `keycloak` | Keycloak 26: login/registration, Google/Facebook brokering, FinAlly login theme |
+| `keycloak` | Keycloak 26: login/registration, Google/Facebook brokering, Tradex login theme |
 | `email-mcp` | Email MCP server (`send_email` tool over Streamable HTTP) relaying to the SMTP provider |
 | `mailpit` | Local mail catcher used when no SMTP provider is configured |
 
@@ -366,7 +366,7 @@ If a trade fails validation (e.g., insufficient cash), the error is included in 
 
 ### System Prompt Guidance
 
-The LLM should be prompted as "FinAlly, an AI trading assistant" with instructions to:
+The LLM should be prompted as "Tradex, an AI trading assistant" with instructions to:
 - Analyze portfolio composition, risk concentration, and P&L
 - Suggest trades with reasoning
 - Execute trades when the user asks or agrees

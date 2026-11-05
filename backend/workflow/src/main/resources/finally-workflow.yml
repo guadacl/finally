@@ -1,4 +1,4 @@
-# FinAlly workflow module defaults (Camunda 8.8 Spring SDK).
+# Tradex workflow module defaults (Camunda 8.8 Spring SDK).
 # Imported by the app with:  spring.config.import: optional:classpath:finally-workflow.yml
 #
 #   FINALLY_WORKFLOW_ENABLED=false  -> no Camunda client at all; notifications are published directly.

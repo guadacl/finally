@@ -53,9 +53,9 @@ class NotificationSmsSenderTest {
         s.send(of(NotificationType.TARGET_HIT, "user-1", "184.97"));
         s.send(of(NotificationType.CARD_CREATED, "user-1", null));
         s.send(of(NotificationType.CARD_DELETED, "user-1", null));
-        verify(gateway).sendSms("+32470123456", "FinAlly: AAPL hit Support 185.00 (now 184.97)");
-        verify(gateway).sendSms("+32470123456", "FinAlly: new Support card AAPL @ 185.00");
-        verify(gateway).sendSms("+32470123456", "FinAlly: Support card AAPL @ 185.00 deleted");
+        verify(gateway).sendSms("+32470123456", "Tradex: AAPL hit Support 185.00 (now 184.97)");
+        verify(gateway).sendSms("+32470123456", "Tradex: new Support card AAPL @ 185.00");
+        verify(gateway).sendSms("+32470123456", "Tradex: Support card AAPL @ 185.00 deleted");
     }
 
     @Test
@@ -111,7 +111,7 @@ class NotificationSmsSenderTest {
         assertThat(NotificationSmsText.truncate("short")).isEqualTo("short");
         Notification longTicker = new Notification(UUID.randomUUID(), NotificationType.CARD_DELETED, UUID.randomUUID(),
                 "T".repeat(300), KanbanColumn.RESISTANCE, BigDecimal.ONE, null, "m", Instant.now(), "user-1");
-        assertThat(NotificationSmsText.of(longTicker)).hasSize(160).startsWith("FinAlly: Resistance card TTT");
+        assertThat(NotificationSmsText.of(longTicker)).hasSize(160).startsWith("Tradex: Resistance card TTT");
     }
 
     @Test

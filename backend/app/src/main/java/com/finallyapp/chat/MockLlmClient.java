@@ -88,7 +88,7 @@ public class MockLlmClient implements LlmClient {
         }
 
         String message = said.isEmpty()
-                ? "Mock FinAlly here. Your portfolio is diversified across your holdings; "
+                ? "Mock Tradex here. Your portfolio is diversified across your holdings; "
                   + "ask me to buy or sell (e.g. \"buy 5 TSLA\") or to add a ticker to your watchlist."
                 : String.join(" ", said);
         Map<String, Object> out = new LinkedHashMap<>();

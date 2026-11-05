@@ -21,7 +21,7 @@ class NotificationEmailTest {
     @Test
     void supportEmail() {
         NotificationEmail e = NotificationEmail.of(hit(KanbanColumn.SUPPORT, "185", "184.966"), "http://localhost:8000/alerts");
-        assertThat(e.subject()).isEqualTo("FinAlly alert: AAPL hit Support 185.00");
+        assertThat(e.subject()).isEqualTo("Tradex alert: AAPL hit Support 185.00");
         assertThat(e.body())
                 .contains("Ticker:        AAPL")
                 .contains("Card:          Support (alerts when price is at or below target)")
@@ -35,7 +35,7 @@ class NotificationEmailTest {
     @Test
     void resistanceEmailUsesDisplayName() {
         NotificationEmail e = NotificationEmail.of(hit(KanbanColumn.RESISTANCE, "200.5", "201"), "http://x/alerts");
-        assertThat(e.subject()).isEqualTo("FinAlly alert: AAPL hit Resistance 200.50");
+        assertThat(e.subject()).isEqualTo("Tradex alert: AAPL hit Resistance 200.50");
         assertThat(e.body()).contains("Resistance (alerts when price is at or above target)").contains("Current price: 201.00");
     }
 
@@ -54,7 +54,7 @@ class NotificationEmailTest {
     void cardCreatedEmail() {
         NotificationEmail e = NotificationEmail.of(of(NotificationType.CARD_CREATED, KanbanColumn.SUPPORT),
                 "http://localhost:8000/alerts");
-        assertThat(e.subject()).isEqualTo("FinAlly: new Support card AAPL @ 185.00");
+        assertThat(e.subject()).isEqualTo("Tradex: new Support card AAPL @ 185.00");
         assertThat(e.body())
                 .contains("You added a Support card for AAPL")
                 .contains("Target price:  185.00")
@@ -67,7 +67,7 @@ class NotificationEmailTest {
     void cardDeletedEmail() {
         NotificationEmail e = NotificationEmail.of(of(NotificationType.CARD_DELETED, KanbanColumn.RESISTANCE),
                 "http://localhost:8000/alerts");
-        assertThat(e.subject()).isEqualTo("FinAlly: Resistance card AAPL @ 185.00 deleted");
+        assertThat(e.subject()).isEqualTo("Tradex: Resistance card AAPL @ 185.00 deleted");
         assertThat(e.body()).contains("You deleted the Resistance card for AAPL").contains("no more alerts");
     }
 }

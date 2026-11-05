@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start FinAlly (app + postgres + camunda) with Docker Compose. Idempotent.
+# Start Tradex (app + postgres + camunda) with Docker Compose. Idempotent.
 #   ./scripts/start_mac.sh            start (builds the image the first time)
 #   ./scripts/start_mac.sh --build    force a rebuild
 #   ./scripts/start_mac.sh --no-open  don't open the browser
@@ -39,7 +39,7 @@ if [ -z "$BUILD" ] && ! docker image inspect finally-app:latest >/dev/null 2>&1;
   BUILD="--build"
 fi
 
-echo "Starting FinAlly..."
+echo "Starting Tradex..."
 docker compose up -d $BUILD
 
 echo -n "Waiting for ${URL}/api/health "
@@ -47,7 +47,7 @@ for _ in $(seq 1 90); do
   if curl -fsS "${URL}/api/health" >/dev/null 2>&1; then
     echo " ok"
     echo ""
-    echo "FinAlly is running:  ${URL}"
+    echo "Tradex is running:  ${URL}"
     echo "Camunda Operate:     http://localhost:8081  (demo / demo)"
     if [ "$OPEN" = "1" ]; then
       if command -v open >/dev/null 2>&1; then open "$URL";
@@ -60,5 +60,5 @@ for _ in $(seq 1 90); do
 done
 
 echo ""
-echo "FinAlly did not become healthy in time. Check the logs with: docker compose logs app" >&2
+echo "Tradex did not become healthy in time. Check the logs with: docker compose logs app" >&2
 exit 1

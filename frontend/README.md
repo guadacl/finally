@@ -1,4 +1,4 @@
-# FinAlly — Angular frontend
+# Tradex — Angular frontend
 
 Angular 21 (standalone components, signals, zoneless), Tailwind CSS 4, Angular CDK drag & drop, lightweight-charts 5.
 

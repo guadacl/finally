@@ -1,4 +1,4 @@
-# FinAlly — Build Contracts
+# Tradex — Build Contracts
 
 This file is the **binding contract** between the four build agents (DB, Camunda, Backend, Frontend).
 Where `PLAN.md` still mentions Python, FastAPI, uv, LiteLLM, Next.js, SQLite or pytest, **this file wins**.
@@ -154,7 +154,7 @@ Persistence mapping (`backend/app/src/main/java/com/finallyapp/persistence`): on
   - *Deletion*: `KanbanService.delete` reads the card first and calls `KanbanWorkflow.cardDeleted(card, processInstanceKey)`; the `card-deleted` message carries `ticker`, `column`, `targetPrice`, `userId`. Instances of an older process version (created before deletion emails existed) end without emailing; after a successful correlation the workflow checks the instance's process definition (cached) and, for such versions, sends the deletion toast + email directly. If the message cannot be correlated, the fallback sends them and the instance is cancelled by its key.
   - *Fallback path* (Camunda down / correlation failed): `DirectKanbanWorkflow` publishes the toast and calls `NotificationEmailer` for created / deleted / target hit. So each event is emailed exactly once on either path; Camunda job re-deliveries keep the notification id (derived from the job key) and are de-duplicated.
   - `NotificationMailer` (app, implements `NotificationEmailer`): asynchronous (one background thread, bounded queue), never throws; skipped when `MAIL_ENABLED=false`, `EMAIL_MCP_URL` is empty, there is no owner, or the owner has no email. It calls `McpEmailGateway`, an MCP client (Java MCP SDK 2.1.0, `mcp-core` + `mcp-json-jackson2`, Streamable HTTP transport) for the tool **`send_email {to, subject, text, html?}`** of the email MCP server (`mcp/email-mcp-server`, Node + `@modelcontextprotocol/sdk` + nodemailer, provider-agnostic SMTP). Each call is bounded by `EMAIL_MCP_TIMEOUT` (10 s).
-  - Subjects: `FinAlly: new Support card AAPL @ 185.00`, `FinAlly: Support card AAPL @ 185.00 deleted`, `FinAlly alert: AAPL hit Support 185.00`. Plain-text body with ticker, Support/Resistance (and its rule), target, current price (target hit), time (UTC) and a link to `${APP_PUBLIC_URL}/alerts`.
+  - Subjects: `Tradex: new Support card AAPL @ 185.00`, `Tradex: Support card AAPL @ 185.00 deleted`, `Tradex alert: AAPL hit Support 185.00`. Plain-text body with ticker, Support/Resistance (and its rule), target, current price (target hit), time (UTC) and a link to `${APP_PUBLIC_URL}/alerts`.
   - Address: copied from the OIDC `email` claim into `users_profile.email` by `UserEmailSyncFilter` on the user's requests (written only when it changes); it is not fetched from the Keycloak admin API.
 
 ## 6. Camunda contract (Camunda agent implements)
@@ -226,7 +226,7 @@ Already written by the orchestrator — read them, don't edit:
 | `APP_PUBLIC_URL` | app | `http://localhost:8000` (link in alert emails; compose: `http://localhost:${APP_PORT}`) |
 | `MAIL_HOST` / `MAIL_PORT` | email-mcp | `localhost` / `1025`; compose `mailpit` / `1025` |
 | `MAIL_USERNAME` / `MAIL_PASSWORD` / `MAIL_STARTTLS` / `MAIL_SECURE` | email-mcp | empty / empty / `false` / `true` on port 465 |
-| `MAIL_FROM` | email-mcp | `FinAlly <alerts@finally.local>` |
+| `MAIL_FROM` | email-mcp | `Tradex <alerts@finally.local>` |
 | `MCP_PORT` / `MCP_PATH` | email-mcp | `3001` / `/mcp` |
 | `MAILPIT_WEB_HOST_PORT` / `MAILPIT_SMTP_HOST_PORT` | mailpit | `8025` / `1025` |
 

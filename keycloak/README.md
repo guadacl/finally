@@ -1,4 +1,4 @@
-# Keycloak — FinAlly login & registration
+# Keycloak — Tradex login & registration
 
 Keycloak 26 provides the login, self-registration and password-reset pages. The app (Spring Boot) is an
 OIDC client of the realm `finally` and keeps the login in its own session cookie.
@@ -38,9 +38,9 @@ keycloak-26.8.1/bin/kc.sh start-dev --http-port 8180 --import-realm
 
 ## Custom login page (theme `finally`)
 
-The login, registration, password-reset and social first-login pages use the **FinAlly login theme** in
+The login, registration, password-reset and social first-login pages use the **Tradex login theme** in
 `themes/finally/login/`: Keycloak's classic login pages restyled in the trading-terminal look (dark grid background,
-yellow "F" logo, purple submit button, white Google / blue Facebook buttons under "or continue with").
+yellow "T" logo, purple submit button, white Google / blue Facebook buttons under "or continue with").
 
 - Only CSS (`resources/css/finally.css`) and texts (`messages/messages_en.properties`) are customised; the page
   templates are Keycloak's own, so every login feature (errors, remember me, reset password, OTP, account linking)
@@ -68,11 +68,11 @@ login and registration always keep working.
 ### 1. Google (Google Cloud Console)
 
 1. https://console.cloud.google.com → select or create a project.
-2. **Google Auth Platform → Branding** (OAuth consent screen): app name `FinAlly`, your support email.
+2. **Google Auth Platform → Branding** (OAuth consent screen): app name `Tradex`, your support email.
    **Audience**: User type *External*, publishing status *Testing*, and add your own Google account under
    **Test users** (in Testing mode only test users can sign in). **Data access**: the scopes `openid`, `.../auth/userinfo.email`,
    `.../auth/userinfo.profile` (non-sensitive, no verification needed).
-3. **Clients → Create client** → Application type *Web application*, name `FinAlly Keycloak`.
+3. **Clients → Create client** → Application type *Web application*, name `Tradex Keycloak`.
    **Authorized redirect URIs**: `http://localhost:8180/realms/finally/broker/google/endpoint`
    (Google accepts plain `http` for `localhost`). No JavaScript origins needed.
 4. Copy the **Client ID** (`...apps.googleusercontent.com`) and **Client secret** (`GOCSPX-...`) into `.env`:
@@ -127,7 +127,7 @@ What happens on the first "Sign in with Google/Facebook":
 1. **Review profile** (only if something is missing): e.g. a Facebook account without an email, or one the user
    declined to share, must enter an email here. The email is required, so every user has one for the alert emails
    (`users_profile.email` comes from the OIDC `email` claim as for password users).
-2. **No FinAlly account with that email** → a new Keycloak user is created (username taken from the provider profile, new `sub`, so a
+2. **No Tradex account with that email** → a new Keycloak user is created (username taken from the provider profile, new `sub`, so a
    fresh $10,000 portfolio).
 3. **An account with that email already exists** (`duplicateEmailsAllowed` is off) → Keycloak asks *"Link Google to
    your existing account?"* and then the user **re-enters that account's password** (email verification would be used

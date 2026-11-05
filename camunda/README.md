@@ -1,4 +1,4 @@
-# FinAlly — Camunda workflow
+# Tradex — Camunda workflow
 
 Each kanban card (SUPPORT/RESISTANCE price level) has its own instance of the Camunda 8 process `kanban-card`.
 Camunda tracks the card's column and sends every browser notification through one job worker.

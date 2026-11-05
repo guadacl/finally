@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
-  title: FinAlly API
+  title: Tradex API
   version: 1.0.0
   description: |
-    API contract for FinAlly, the AI trading workstation. Spec-first: the backend generates
+    API contract for Tradex, the AI trading workstation. Spec-first: the backend generates
     Spring interfaces from this file and the frontend client must match it.
     All money/price/quantity values are JSON numbers. Timestamps are ISO-8601 (UTC).
 servers:

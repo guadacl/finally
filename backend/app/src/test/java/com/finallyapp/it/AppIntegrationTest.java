@@ -443,17 +443,17 @@ class AppIntegrationTest {
         verify(emailGateway, timeout(5000).times(3)).sendEmail(eq("demo@finally.local"), subject.capture(),
                 body.capture());
         assertThat(subject.getAllValues()).containsExactly(
-                "FinAlly: new Resistance card AAPL @ 200.00",
-                "FinAlly alert: AAPL hit Resistance 200.00",
-                "FinAlly: Resistance card AAPL @ 200.00 deleted");
+                "Tradex: new Resistance card AAPL @ 200.00",
+                "Tradex alert: AAPL hit Resistance 200.00",
+                "Tradex: Resistance card AAPL @ 200.00 deleted");
         assertThat(body.getAllValues().get(1)).contains("Current price: 200.10").contains("/alerts");
 
         org.mockito.ArgumentCaptor<String> sms = org.mockito.ArgumentCaptor.forClass(String.class);
         verify(smsGateway, timeout(5000).times(3)).sendSms(eq("+32470123456"), sms.capture());
         assertThat(sms.getAllValues()).containsExactly(
-                "FinAlly: new Resistance card AAPL @ 200.00",
-                "FinAlly: AAPL hit Resistance 200.00 (now 200.10)",
-                "FinAlly: Resistance card AAPL @ 200.00 deleted");
+                "Tradex: new Resistance card AAPL @ 200.00",
+                "Tradex: AAPL hit Resistance 200.00 (now 200.10)",
+                "Tradex: Resistance card AAPL @ 200.00 deleted");
 
         userContacts.rememberPhone("default", null);
         assertThat(userContacts.phone("default")).isEmpty();

@@ -1,4 +1,4 @@
-# FinAlly — full stack: app + postgres + camunda
+# Tradex — full stack: app + postgres + camunda
 #   docker compose up -d --build      start everything (http://localhost:8000)
 #   docker compose down               stop (volumes / data are kept)
 #

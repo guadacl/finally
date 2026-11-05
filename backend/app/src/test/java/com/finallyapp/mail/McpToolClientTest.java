@@ -92,9 +92,9 @@ class McpToolClientTest {
         McpToolClient client = new McpToolClient(System.getenv("EMAIL_MCP_IT_URL"), Duration.ofSeconds(10));
         // what the app does at startup (ApplicationReadyEvent): pays the one-off SDK initialisation up front
         assertThat(client.warmUpNow()).isTrue();
-        assertThat(new McpEmailGateway(client).sendEmail("demo@finally.local", "FinAlly alert: AAPL hit Support 185.00",
+        assertThat(new McpEmailGateway(client).sendEmail("demo@finally.local", "Tradex alert: AAPL hit Support 185.00",
                 "Interop test from McpToolClientTest")).isNotBlank();
         assertThat(new McpSmsGateway(client).sendSms("+32470123456",
-                "FinAlly: AAPL hit Support 185.00 (now 184.97)")).isNotBlank();
+                "Tradex: AAPL hit Support 185.00 (now 184.97)")).isNotBlank();
     }
 }
