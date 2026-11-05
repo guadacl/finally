@@ -26,7 +26,7 @@ After logging in they see:
 
 The menu of the web application contain markets watchlists portafolio 
 
-Implemented menu: **Markets** (watchlist + chart + trade bar), **Watchlists** (manage tickers), **Portfolio** (heatmap, value chart, positions, Support/Resistance board) and **Alerts** (price alerts table, then a Support table and a Resistance table); the AI chat panel is docked on every page.
+Implemented menu: **Markets** (watchlist + chart + trade bar), **Watchlists** (manage tickers), **Portfolio** (heatmap, value chart, positions, Support/Resistance board) and **Alerts** (price alerts table, then a Support table and a Resistance table); the AI chat panel is docked on every page. Every table (watchlist, positions, price alerts, Support, Resistance) shows the **company name** right after the ticker and has a **search box** that filters rows by ticker and company name (full text: every word must match).
 
 
 
@@ -301,6 +301,7 @@ All tables include a `user_id` column defaulting to `"default"`. This is hardcod
 | GET | `/api/watchlist` | Current watchlist tickers with latest prices |
 | POST | `/api/watchlist` | Add a ticker: `{ticker}` |
 | DELETE | `/api/watchlist/{ticker}` | Remove a ticker |
+| GET | `/api/reference/names?tickers=A,B` | Company names for tickers (table Name column and search) |
 
 ### Chat
 | Method | Path | Description |

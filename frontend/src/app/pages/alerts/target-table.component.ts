@@ -10,6 +10,8 @@ import { TICKER_PATTERN, normalizeTicker } from '../../core/watchlist.service';
 import { PctPipe, PricePipe, VolumePipe } from '../../shared/format';
 import { PriceFlashDirective } from '../../shared/price-flash.directive';
 import { fmtRsi, rsiClass, rsiTitle } from '../../shared/rsi';
+import { CompanyNameService } from '../../core/company-name.service';
+import { TableSearchComponent, matchesSearch } from '../../shared/table-search.component';
 
 /**
  * One Support or Resistance table on the Alerts page: the cards of one kanban column shown with the same market
@@ -19,7 +21,7 @@ import { fmtRsi, rsiClass, rsiTitle } from '../../shared/rsi';
 @Component({
   selector: 'app-target-table',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, DatePipe, PricePipe, PctPipe, VolumePipe, PriceFlashDirective],
+  imports: [FormsModule, DatePipe, PricePipe, PctPipe, VolumePipe, PriceFlashDirective, TableSearchComponent],
   host: { class: 'block' },
   template: `
     <section class="panel flex h-full flex-col overflow-hidden" [attr.data-testid]="'target-table-' + column()">
@@ -32,7 +34,7 @@ import { fmtRsi, rsiClass, rsiTitle } from '../../shared/rsi';
           </span>
         </span>
         <div class="flex items-center gap-3 normal-case tracking-normal">
-          <span class="num">{{ rows().length }} {{ rows().length === 1 ? 'card' : 'cards' }} · notifies once · via Camunda</span>
+          <span class="num">{{ allRows().length }} {{ allRows().length === 1 ? 'card' : 'cards' }} · notifies once · via Camunda</span>
           <button
             type="button"
             class="btn btn-submit flex h-7 w-7 items-center justify-center p-0 text-lg leading-none"
@@ -76,8 +78,11 @@ import { fmtRsi, rsiClass, rsiTitle } from '../../shared/rsi';
         </form>
       }
 
+      @if (allRows().length > 0) {
+        <app-table-search class="border-b border-edge p-2" [testId]="'target-search-' + column()" [(query)]="query" />
+      }
       <div class="min-h-0 flex-1 overflow-auto">
-        @if (rows().length === 0) {
+        @if (allRows().length === 0) {
           <div class="flex h-full min-h-24 flex-col items-center justify-center gap-1 p-6 text-center text-sm text-muted"
             [attr.data-testid]="'target-empty-' + column()">
             <span>No {{ label() }} targets yet.</span>
@@ -88,6 +93,7 @@ import { fmtRsi, rsiClass, rsiTitle } from '../../shared/rsi';
             <thead class="sticky top-0 z-10 bg-panel text-[10px] tracking-widest text-muted uppercase">
               <tr class="border-b border-edge">
                 <th class="px-3 py-2 text-left">Ticker</th>
+                <th class="px-3 py-2 text-left">Name</th>
                 <th class="px-3 py-2 text-right">Price</th>
                 <th class="px-3 py-2 text-right" title="Lowest price of the current trading day">Day low</th>
                 <th class="px-3 py-2 text-right" title="Highest price of the current trading day">Day high</th>
@@ -107,6 +113,8 @@ import { fmtRsi, rsiClass, rsiTitle } from '../../shared/rsi';
                   [attr.data-testid]="'target-row-' + c.id" [attr.data-broken]="broken(c)" [attr.data-status]="statusOf(c)"
                   [attr.title]="broken(c) ? 'Price is above this resistance target' : null">
                   <td class="px-3 py-2 font-bold">{{ c.ticker }}</td>
+                  <td class="max-w-[14rem] truncate px-3 py-2 text-muted" [attr.title]="names.name(c.ticker)"
+                    [attr.data-testid]="'target-name-' + c.id">{{ names.name(c.ticker) ?? '' }}</td>
                   <td class="num px-3 py-2 text-right"><span class="rounded px-1" [appPriceFlash]="livePrice(c)">{{ livePrice(c) | price }}</span></td>
                   <td class="num px-3 py-2 text-right text-muted">{{ dayRange(c).low | price }}</td>
                   <td class="num px-3 py-2 text-right text-muted">{{ dayRange(c).high | price }}</td>
@@ -140,8 +148,10 @@ import { fmtRsi, rsiClass, rsiTitle } from '../../shared/rsi';
                   </td>
                 </tr>
                 @if (rowError()[c.id]; as e) {
-                  <tr><td colspan="12" class="px-3 pb-2 text-[11px] text-down" [attr.data-testid]="'target-error-' + c.id">{{ c.ticker }}: {{ e }}</td></tr>
+                  <tr><td colspan="13" class="px-3 pb-2 text-[11px] text-down" [attr.data-testid]="'target-error-' + c.id">{{ c.ticker }}: {{ e }}</td></tr>
                 }
+              } @empty {
+                <tr><td colspan="13" class="py-6 text-center text-muted" [attr.data-testid]="'target-no-match-' + column()">No {{ label() }} target matches "{{ query() }}"</td></tr>
               }
             </tbody>
           </table>
@@ -173,9 +183,17 @@ export class TargetTableComponent {
   readonly otherColumn = computed<KanbanColumn>(() => (this.isSupport() ? 'RESISTANCE' : 'SUPPORT'));
   readonly otherLabel = computed(() => COLUMN_LABEL[this.otherColumn()]);
 
+  readonly names = inject(CompanyNameService);
+  /** Full-text search on ticker and company name. */
+  readonly query = signal('');
+
   /** The column's cards, nearest target first; re-sorts as prices stream. */
-  readonly rows = computed(() =>
+  readonly allRows = computed(() =>
     sortByDistance(this.isSupport() ? this.kanban.support() : this.kanban.resistance(), (c) => this.livePrice(c)),
+  );
+  /** The cards matching the search. */
+  readonly rows = computed(() =>
+    this.allRows().filter((c) => matchesSearch(this.query(), c.ticker, this.names.name(c.ticker))),
   );
 
   readonly formOpen = signal(false);

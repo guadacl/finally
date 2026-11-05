@@ -6,6 +6,8 @@ import { TICKER_PATTERN, WatchlistService, changePercent, normalizeTicker } from
 import { PctPipe, PricePipe, signClass } from './format';
 import { PriceFlashDirective } from './price-flash.directive';
 import { SparklineComponent } from './sparkline.component';
+import { CompanyNameService } from '../core/company-name.service';
+import { TableSearchComponent, matchesSearch } from './table-search.component';
 
 /** One watchlist row; reads its ticker's live price signal. */
 @Component({
@@ -22,6 +24,7 @@ import { SparklineComponent } from './sparkline.component';
       <span class="block h-5 w-0.5 rounded" [class.bg-accent]="selected()"></span>
     </td>
     <td class="font-semibold tracking-wide">{{ item().ticker }}</td>
+    <td class="max-w-[11rem] truncate text-muted" [attr.title]="name()" data-testid="watchlist-name">{{ name() ?? '' }}</td>
     <td class="num text-right">
       <span class="rounded px-1" [appPriceFlash]="price()" data-testid="watchlist-price">{{ price() | price }}</span>
     </td>
@@ -45,6 +48,7 @@ import { SparklineComponent } from './sparkline.component';
 export class WatchlistRowComponent {
   private readonly prices = inject(PriceStreamService);
   private readonly watchlist = inject(WatchlistService);
+  private readonly names = inject(CompanyNameService);
 
   readonly item = input.required<WatchlistItem>();
   readonly selected = input(false);
@@ -53,6 +57,7 @@ export class WatchlistRowComponent {
   readonly pick = output<string>();
   readonly remove = output<string>();
 
+  readonly name = computed(() => this.names.name(this.item().ticker));
   private readonly state = computed(() => this.prices.state(this.item().ticker)());
   readonly price = computed(() => this.state()?.price ?? this.item().price ?? null);
   readonly history = computed(() => this.state()?.history ?? []);
@@ -74,7 +79,7 @@ export class WatchlistRowComponent {
 @Component({
   selector: 'app-watchlist-table',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, WatchlistRowComponent],
+  imports: [FormsModule, WatchlistRowComponent, TableSearchComponent],
   host: { class: 'flex min-h-0 flex-col' },
   template: `
     @if (showAdd()) {
@@ -97,12 +102,14 @@ export class WatchlistRowComponent {
         <div data-testid="watchlist-error" class="border-b border-edge bg-down/10 px-2 py-1 text-xs text-down">{{ e }}</div>
       }
     }
+    <app-table-search class="border-b border-edge p-2" testId="watchlist-search" [(query)]="query" />
     <div class="min-h-0 flex-1 overflow-auto">
       <table class="grid-table">
         <thead>
           <tr>
             <th></th>
             <th>Ticker</th>
+            <th>Name</th>
             <th class="!text-right">Price</th>
             <th class="!text-right">Chg %</th>
             <th>Trend</th>
@@ -112,7 +119,7 @@ export class WatchlistRowComponent {
           </tr>
         </thead>
         <tbody>
-          @for (item of watchlist.items(); track item.ticker) {
+          @for (item of rows(); track item.ticker) {
             <tr
               app-watchlist-row
               [item]="item"
@@ -124,8 +131,8 @@ export class WatchlistRowComponent {
             ></tr>
           } @empty {
             <tr>
-              <td colspan="6" class="py-6 text-center text-muted">
-                {{ watchlist.loaded() ? 'Watchlist is empty' : 'Loading…' }}
+              <td colspan="7" class="py-6 text-center text-muted" data-testid="watchlist-empty">
+                {{ !watchlist.loaded() ? 'Loading…' : watchlist.items().length ? 'No stock matches "' + query() + '"' : 'Watchlist is empty' }}
               </td>
             </tr>
           }
@@ -142,6 +149,13 @@ export class WatchlistTableComponent {
   readonly removable = input(true);
   readonly showAdd = input(true);
   readonly pick = output<string>();
+
+  private readonly names = inject(CompanyNameService);
+  /** Full-text search on ticker and company name. */
+  readonly query = signal('');
+  readonly rows = computed(() =>
+    this.watchlist.items().filter((i) => matchesSearch(this.query(), i.ticker, this.names.name(i.ticker))),
+  );
 
   readonly draft = signal('');
   readonly error = signal<string | null>(null);

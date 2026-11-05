@@ -5,6 +5,7 @@ import {
   ChatMessage,
   ChatRequest,
   ChatResponse,
+  CompanyName,
   Health,
   KanbanCard,
   KanbanCardCreate,
@@ -62,6 +63,11 @@ export class ApiClient {
   }
   removeFromWatchlist(ticker: string): Observable<void> {
     return this.http.delete<void>(`/api/watchlist/${encodeURIComponent(ticker)}`);
+  }
+
+  // reference
+  getCompanyNames(tickers: string[]): Observable<CompanyName[]> {
+    return this.http.get<CompanyName[]>('/api/reference/names', { params: { tickers: tickers.join(',') } });
   }
 
   // chat

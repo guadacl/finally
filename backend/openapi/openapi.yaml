@@ -17,6 +17,7 @@ tags:
   - name: chat
   - name: kanban
   - name: alerts
+  - name: reference
 paths:
   /api/health:
     get:
@@ -76,6 +77,29 @@ paths:
           content:
             text/event-stream:
               schema: { $ref: '#/components/schemas/Notification' }
+
+  /api/reference/names:
+    get:
+      tags: [reference]
+      operationId: getCompanyNames
+      description: |
+        Company names for the given tickers (shown after the ticker in every table and used by the table search).
+        Names come from a built-in list of common US stocks and, when FINNHUB_API_KEY or MASSIVE_API_KEY is set,
+        from the provider's company profile (cached). Unknown tickers come back with a null name.
+      parameters:
+        - name: tickers
+          in: query
+          required: true
+          description: Comma-separated tickers (at most 100; invalid symbols are skipped)
+          schema: { type: string }
+      responses:
+        '200':
+          description: One entry per valid requested ticker
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/CompanyName' }
 
   /api/portfolio:
     get:
@@ -450,6 +474,13 @@ components:
       required: [ticker]
       properties:
         ticker: { type: string, example: PYPL }
+
+    CompanyName:
+      type: object
+      required: [ticker]
+      properties:
+        ticker: { type: string }
+        name: { type: string, nullable: true, description: 'Company name; null when unknown' }
 
     WatchlistItem:
       type: object

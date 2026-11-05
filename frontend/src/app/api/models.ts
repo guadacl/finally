@@ -112,6 +112,11 @@ export interface WatchlistAddRequest {
   ticker: string;
 }
 
+export interface CompanyName {
+  ticker: string;
+  name?: string | null;
+}
+
 export interface WatchlistItem {
   ticker: string;
   price?: number | null;

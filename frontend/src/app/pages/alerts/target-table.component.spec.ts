@@ -46,7 +46,10 @@ describe('TargetTableComponent', () => {
     ]);
   });
 
-  afterEach(() => http.verify());
+  afterEach(() => {
+    http.match((r) => r.url === '/api/reference/names').forEach((r) => r.flush([]));
+    http.verify();
+  });
 
   function render(column: KanbanCard['column']) {
     const fixture = TestBed.createComponent(TargetTableComponent);
@@ -60,7 +63,7 @@ describe('TargetTableComponent', () => {
   it('has the Price Alerts columns plus target, dist, status and comment', () => {
     const { root } = render('SUPPORT');
     const heads = Array.from(root.querySelectorAll('thead th')).map((th) => th.textContent!.trim()).filter(Boolean);
-    expect(heads).toEqual(['Ticker', 'Price', 'Day low', 'Day high', 'Vol (last session)', 'RSI (14)', 'Target', 'Dist', 'Status',
+    expect(heads).toEqual(['Ticker', 'Name', 'Price', 'Day low', 'Day high', 'Vol (last session)', 'RSI (14)', 'Target', 'Dist', 'Status',
       'Comment', 'Added']);
   });
 
@@ -75,6 +78,32 @@ describe('TargetTableComponent', () => {
     expect(q('target-status-s1')!.textContent!.trim()).toBe('Active');
     expect(q('target-status-s2')!.textContent!.trim()).toBe('Notified');
     expect((q('target-comment-s2') as HTMLInputElement).value).toBe('earnings');
+  });
+
+  it('shows the company name after the ticker and searches on ticker and name', async () => {
+    const { fixture, root, q } = render('SUPPORT');
+    await new Promise((r) => setTimeout(r, 0)); // the name lookups are batched on the next tick
+    const req = http.expectOne((r) => r.url === '/api/reference/names');
+    expect(req.request.params.get('tickers')!.split(',').sort()).toEqual(['AAPL', 'MSFT']);
+    req.flush([{ ticker: 'AAPL', name: 'Apple Inc.' }, { ticker: 'MSFT', name: 'Microsoft Corporation' }]);
+    await fixture.whenStable();
+    expect(q('target-name-s1')!.textContent!.trim()).toBe('Apple Inc.');
+
+    const rowIds = () => Array.from(root.querySelectorAll('tbody tr[data-testid^="target-row-"]')).map((r) => r.getAttribute('data-testid'));
+    const search = q('target-search-SUPPORT') as HTMLInputElement;
+    const type = async (v: string) => {
+      search.value = v;
+      search.dispatchEvent(new Event('input'));
+      await fixture.whenStable();
+    };
+    await type('micro');
+    expect(rowIds()).toEqual(['target-row-s2']);
+    await type('aap');
+    expect(rowIds()).toEqual(['target-row-s1']);
+    await type('tesla');
+    expect(rowIds()).toEqual([]);
+    expect(q('target-no-match-SUPPORT')!.textContent).toContain('tesla');
+    expect(root.textContent).toContain('2 cards'); // the header keeps the total
   });
 
   it('highlights a Resistance target below the current price', () => {

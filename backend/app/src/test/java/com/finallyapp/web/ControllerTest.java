@@ -27,6 +27,8 @@ import com.finallyapp.chat.ChatService;
 import com.finallyapp.error.ApiException;
 import com.finallyapp.kanban.KanbanController;
 import com.finallyapp.kanban.KanbanService;
+import com.finallyapp.market.CompanyNameController;
+import com.finallyapp.market.CompanyNames;
 import com.finallyapp.market.MarketDataSource;
 import com.finallyapp.portfolio.PortfolioController;
 import com.finallyapp.portfolio.PortfolioService;
@@ -49,7 +51,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc(addFilters = false)
 @WebMvcTest(controllers = {PortfolioController.class, WatchlistController.class, KanbanController.class,
-        ChatController.class, HealthController.class})
+        ChatController.class, HealthController.class, CompanyNameController.class})
 class ControllerTest {
 
     private static final OffsetDateTime NOW = OffsetDateTime.of(2026, 11, 2, 10, 0, 0, 0, ZoneOffset.UTC);
@@ -69,6 +71,24 @@ class ControllerTest {
     UserProfileRepository profiles;
     @MockitoBean
     MarketDataSource source;
+    @MockitoBean
+    CompanyNames names;
+
+    @Test
+    void companyNamesSkipInvalidTickersAndLookUpUnknownOnes() throws Exception {
+        when(names.cached(anyString())).thenReturn(java.util.Optional.empty());
+        when(names.cached("AAPL")).thenReturn(java.util.Optional.of("Apple Inc."));
+        when(names.lookup("ROKU")).thenReturn(java.util.Optional.of("Roku Inc"));
+        when(names.lookup("ZZZZ")).thenReturn(java.util.Optional.empty());
+        mvc.perform(get("/api/reference/names").param("tickers", "aapl, roku,,1BAD,ZZZZ,AAPL"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(3))
+                .andExpect(jsonPath("$[0].ticker").value("AAPL"))
+                .andExpect(jsonPath("$[0].name").value("Apple Inc."))
+                .andExpect(jsonPath("$[1].name").value("Roku Inc"))
+                .andExpect(jsonPath("$[2].ticker").value("ZZZZ"))
+                .andExpect(jsonPath("$[2].name").value(org.hamcrest.Matchers.nullValue()));
+    }
 
     private static Portfolio emptyPortfolio() {
         return new Portfolio(new BigDecimal("10000.00"), BigDecimal.ZERO, new BigDecimal("10000.00"), BigDecimal.ZERO, List.of());

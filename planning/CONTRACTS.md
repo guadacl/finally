@@ -128,6 +128,10 @@ price_alerts(                                     -- V3: Alerts page
 API: GET /api/alerts, POST /api/alerts {ticker, upperLimit?, lowerLimit?, comment?}, DELETE /api/alerts/{id}
 ```
 
+Company names and table search (all tables: watchlist, positions, price alerts, Support, Resistance):
+- `GET /api/reference/names?tickers=AAPL,MSFT` → `[{ticker, name|null}]` (`CompanyNameController` / `CompanyNames`). Built-in names for the default watchlist and common US stocks; other tickers are looked up once via Finnhub `/stock/profile2` (if `FINNHUB_API_KEY`) else Massive `/v3/reference/tickers/{t}` (if `MASSIVE_API_KEY`), cached in memory (unknown: 24 h, failures: retried after 5 min), at most 10 provider lookups per call.
+- UI: a **Name** column right after **Ticker**, and a search box above each table that filters rows client-side: every word of the query must appear in the ticker or the company name (case- and accent-insensitive, partial words). Names come from the shared `CompanyNameService` (one batched request per tick).
+
 Alerts page behaviour:
 - Each row also shows `rsi`: RSI(14), Wilder smoothing, on daily closes from Massive end-of-day aggregates (`DailyCloses`, ~150 calendar days, one ticker per 20 s, cached per day), with the live price as today's close during the session. `null` without `MASSIVE_API_KEY` or until the history has loaded. UI: ≥ 70 overbought, ≤ 30 oversold.
 - Adding an alert also creates kanban cards: `lowerLimit` → a SUPPORT card, `upperLimit` → a RESISTANCE card (frontend, via `POST /api/kanban`; deleting the alert leaves the cards). The alert form's comment is copied onto those cards.

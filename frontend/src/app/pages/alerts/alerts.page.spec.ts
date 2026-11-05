@@ -33,6 +33,7 @@ describe('AlertsPage', () => {
   afterEach(() => {
     // the page also (re)loads the Support / Resistance cards
     http.match((r) => r.method === 'GET' && r.url === '/api/kanban').forEach((r) => r.flush([]));
+    http.match((r) => r.url === '/api/reference/names').forEach((r) => r.flush([]));
     http.verify();
   });
 
