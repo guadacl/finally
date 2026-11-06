@@ -1,7 +1,7 @@
 # E2E stack: the full app (LLM_MOCK=true) + postgres + camunda, plus a Playwright runner container.
 #   docker compose -f test/docker-compose.test.yml up --build --abort-on-container-exit --exit-code-from playwright
 #   docker compose -f test/docker-compose.test.yml down -v      # throw away the test data afterwards
-# Uses its own project name and volumes, so it never touches your real FinAlly data.
+# Uses its own project name and volumes, so it never touches your real Tradex data.
 
 name: finally-e2e
 

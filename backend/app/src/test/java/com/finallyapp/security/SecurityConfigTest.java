@@ -48,6 +48,8 @@ class SecurityConfigTest {
     UserProfileRepository profiles;
     @MockitoBean
     MarketDataSource source;
+    @MockitoBean
+    com.finallyapp.market.TickerSearchService tickerSearch;
 
     @Test
     void apiWithoutLoginIs401Json() throws Exception {

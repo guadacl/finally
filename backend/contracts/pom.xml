@@ -9,6 +9,6 @@
     <version>1.0.0-SNAPSHOT</version>
   </parent>
   <artifactId>finally-contracts</artifactId>
-  <name>FinAlly contracts</name>
+  <name>Tradex contracts</name>
   <description>Shared interfaces and records between the app and workflow modules. Owned by the orchestrator.</description>
 </project>

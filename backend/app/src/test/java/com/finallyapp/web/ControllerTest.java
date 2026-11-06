@@ -69,6 +69,27 @@ class ControllerTest {
     UserProfileRepository profiles;
     @MockitoBean
     MarketDataSource source;
+    @MockitoBean
+    com.finallyapp.market.TickerSearchService tickerSearch;
+
+    @Test
+    void tickerSearch() throws Exception {
+        when(tickerSearch.search("enphase")).thenReturn(List.of(
+                new com.finallyapp.api.model.TickerSearchResult("ENPH", "Enphase Energy, Inc.").exchange("XNAS").type("CS")));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/tickers/search")
+                        .param("q", "enphase"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].ticker").value("ENPH"))
+                .andExpect(jsonPath("$[0].name").value("Enphase Energy, Inc."))
+                .andExpect(jsonPath("$[0].exchange").value("XNAS"));
+
+        when(tickerSearch.search("down")).thenThrow(new com.finallyapp.error.ApiException(
+                org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, "SEARCH_UNAVAILABLE", "unavailable"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/tickers/search")
+                        .param("q", "down"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.error").value("SEARCH_UNAVAILABLE"));
+    }
 
     private static Portfolio emptyPortfolio() {
         return new Portfolio(new BigDecimal("10000.00"), BigDecimal.ZERO, new BigDecimal("10000.00"), BigDecimal.ZERO, List.of());

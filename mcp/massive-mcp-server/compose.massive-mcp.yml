@@ -1,0 +1,25 @@
+# Massive (formerly Polygon.io) MCP server for Tradex (included by the root docker-compose.yml).
+#
+# The app's watchlist search (GET /api/tickers/search) calls this server's call_api tool over Streamable HTTP
+# (http://massive-mcp:8000/mcp) to query Massive's reference tickers endpoint by name or ticker.
+# Needs MASSIVE_API_KEY in .env; without it the search answers "unavailable" and tickers can still be added by
+# symbol. Internal only: no host port.
+
+services:
+  massive-mcp:
+    build:
+      context: .
+    image: finally-massive-mcp:latest
+    container_name: finally-massive-mcp
+    # Only the Massive key is passed: the container never sees the app's other secrets.
+    environment:
+      MASSIVE_API_KEY: ${MASSIVE_API_KEY:-}
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('127.0.0.1', 8000), 3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    restart: unless-stopped

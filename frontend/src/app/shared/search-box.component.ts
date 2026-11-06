@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, input, model } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, afterNextRender, input, model, output, viewChild } from '@angular/core';
 
 /**
  * True when every word of the query is found in the ticker or the company name (case-insensitive).
@@ -22,6 +22,7 @@ export function matchesSearch(query: string | null | undefined, ticker: string, 
   },
   template: `
     <input
+      #field
       type="text"
       class="field h-7 w-full py-0 pr-6 text-xs"
       autocomplete="off"
@@ -30,7 +31,7 @@ export function matchesSearch(query: string | null | undefined, ticker: string, 
       [placeholder]="placeholder()"
       [value]="query()"
       (input)="query.set($any($event.target).value)"
-      (keydown.escape)="query.set('')"
+      (keydown.escape)="query.set(''); escaped.emit()"
     />
     @if (query()) {
       <button
@@ -51,4 +52,16 @@ export class SearchBoxComponent {
   readonly placeholder = input('Search ticker or name');
   readonly testId = input('search');
   readonly fullWidth = input(false);
+  /** Focus the field when it appears (e.g. a filter opened from an icon). */
+  readonly autofocus = input(false);
+  /** Esc pressed in the field (after clearing it). */
+  readonly escaped = output<void>();
+
+  private readonly field = viewChild<ElementRef<HTMLInputElement>>('field');
+
+  constructor() {
+    afterNextRender(() => {
+      if (this.autofocus()) this.field()?.nativeElement.focus();
+    });
+  }
 }

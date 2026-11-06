@@ -1,4 +1,4 @@
-# Keycloak for FinAlly login & registration (included by the root docker-compose.yml) - LOCAL DEV ONLY.
+# Keycloak for Tradex login & registration (included by the root docker-compose.yml) - LOCAL DEV ONLY.
 #
 #   Login / register:  http://localhost:8180 is where the browser is sent by the app (realm "finally")
 #   Admin console:     http://localhost:8180/admin  (admin / admin, change KEYCLOAK_ADMIN_PASSWORD in .env)
@@ -39,7 +39,7 @@ services:
       # whole data dir: the image owns it (uid 1000); a new subfolder would be created root-owned and unwritable
       - finally-keycloak:/opt/keycloak/data
       - ./realm:/opt/keycloak/data/import:ro
-      # FinAlly login theme (realm "loginTheme": "finally"); start-dev disables theme caching, so edits show on reload
+      # Tradex login theme (realm "loginTheme": "finally"); start-dev disables theme caching, so edits show on reload
       - ./themes/finally:/opt/keycloak/themes/finally:ro
     healthcheck:
       # The image has no curl/wget: raw HTTP over bash /dev/tcp against the management port.

@@ -15,6 +15,7 @@ import {
   PriceAlertCreate,
   TradeRequest,
   TradeResult,
+  TickerSearchResult,
   UserInfo,
   WatchlistAddRequest,
   WatchlistItem,
@@ -59,6 +60,9 @@ export class ApiClient {
   }
   addToWatchlist(body: WatchlistAddRequest): Observable<WatchlistItem> {
     return this.http.post<WatchlistItem>('/api/watchlist', body);
+  }
+  searchTickers(q: string): Observable<TickerSearchResult[]> {
+    return this.http.get<TickerSearchResult[]>('/api/tickers/search', { params: { q } });
   }
   removeFromWatchlist(ticker: string): Observable<void> {
     return this.http.delete<void>(`/api/watchlist/${encodeURIComponent(ticker)}`);

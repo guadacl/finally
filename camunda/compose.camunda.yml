@@ -1,4 +1,4 @@
-# Camunda 8.8 for FinAlly (included by the root docker-compose.yml) - LOCAL DEV ONLY.
+# Camunda 8.8 for Tradex (included by the root docker-compose.yml) - LOCAL DEV ONLY.
 #
 #   camunda                 camunda/camunda (orchestration cluster: Zeebe + Operate + Tasklist + Admin)
 #   camunda-elasticsearch   secondary storage required by Operate/Tasklist in 8.8

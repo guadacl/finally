@@ -1,10 +1,10 @@
-# FinAlly — AI Trading Workstation
+# Tradex — AI Trading Workstation
 
 ## Project Specification
 
 ## 1. Vision
 
-FinAlly (Finance Ally) is a visually stunning AI-powered trading workstation that streams live market data, lets users trade a simulated portfolio, and integrates an LLM chat assistant that can analyze positions and execute trades on the user's behalf. It looks and feels like a modern Bloomberg terminal with an AI copilot.
+Tradex is a visually stunning AI-powered trading workstation that streams live market data, lets users trade a simulated portfolio, and integrates an LLM chat assistant that can analyze positions and execute trades on the user's behalf. It looks and feels like a modern Bloomberg terminal with an AI copilot.
 
 
 This is the capstone project for an agentic AI coding course. It is built entirely by Coding Agents demonstrating how orchestrated AI agents can produce a production-quality full-stack application. Agents interact through files in `planning/`.
@@ -15,7 +15,7 @@ This is the capstone project for an agentic AI coding course. It is built entire
 
 The user runs a single Docker command (or a provided start script). A browser opens to `http://localhost:8000` and is sent to the **Keycloak login page**, where they log in or **register** a new account (see `planning/CONTRACTS.md` §11). Each account has its own portfolio, watchlist, kanban board and chat.
 
-**Login page**: a custom FinAlly-styled page (Keycloak login theme `finally`, `keycloak/themes/finally/login`) in the dark trading-terminal look: yellow "F" logo, username/email + password, "remember me", "Forgot password?", a purple **Sign in** button, **"or continue with" Google / Facebook** buttons, and "New to FinAlly? Create account". Google and Facebook use Keycloak identity brokering and appear only when their OAuth client ID/secret are configured (`keycloak/README.md`); a social login whose email matches an existing account links to it after the user confirms that account's password. All login logic (passwords, reset, registration, social flow) stays in Keycloak; the theme only changes CSS and texts.
+**Login page**: a custom Tradex-styled page (Keycloak login theme `finally`, `keycloak/themes/finally/login`) in the dark trading-terminal look: yellow "T" logo, username/email + password, "remember me", "Forgot password?", a purple **Sign in** button, **"or continue with" Google / Facebook** buttons, and "New to Tradex? Create account". Google and Facebook use Keycloak identity brokering and appear only when their OAuth client ID/secret are configured (`keycloak/README.md`); a social login whose email matches an existing account links to it after the user confirms that account's password. All login logic (passwords, reset, registration, social flow) stays in Keycloak; the theme only changes CSS and texts.
 
 After logging in they see:
 
@@ -46,9 +46,10 @@ Implemented menu: **Markets** (watchlist + chart + trade bar), **Watchlists** (m
   - **Emails**: in addition to the toast, the card owner gets a plain-text email at their Keycloak account address when a Support/Resistance card is **created**, **deleted**, or **hits its target** (not when it is moved), with ticker, Support/Resistance, target price, current price (target hit), time and a link to `/alerts`. Emails go **through Camunda**: after each of those toast tasks, the `kanban-card` process runs a "Send email" service task (job type `email-notify`); its Spring job worker calls the `send_email` tool of the **email MCP server** (`mcp/email-mcp-server`, compose service `email-mcp`, MCP over Streamable HTTP), which delivers it over SMTP to any provider (SendGrid, Brevo, Mailgun, ... via `MAIL_*` in `.env`). Without provider settings a local **Mailpit** catch-all receives them (web UI `http://localhost:8025`). When Camunda is down, the fallback still sends each toast and email once. Mail failures never affect the toast or the workflow. No Slack or OS-level notification.
 - **Use the Alerts page** — a **price alerts** table: pick a watchlist stock and set a lower and/or upper limit (plus an optional comment). Each row shows ticker, company name (built in for common tickers, otherwise looked up once from Massive or Finnhub; "—" until known), live price, day low / day high, last-session volume, **RSI (14)** (Wilder, on daily closes, live during the session; ≥ 70 overbought in red, ≤ 30 oversold in green, "—" without a Massive key), lower and upper limit, status (in range / above upper / below lower) and when it was added. Adding an alert also creates a **Support** card at the lower limit and a **Resistance** card at the upper limit, carrying the alert's comment (deleting the alert keeps the cards). The comment is shown on the cards, not in the alerts table. The Support and Resistance tables are shown below it.
 - **One row per ticker in every table** — a ticker appears at most once in the price alerts table, once in Support and once in Resistance (watchlist and positions were already unique); enforced by unique constraints (migration V7). Adding a ticker that is already there **updates the existing row** instead (alert: limits replaced; card: new target, re-armed; the comment is replaced only when a new one is given; API answers 200 instead of 201), and the add forms say so. Moving a card to the other column when that column already has the ticker is refused (409 `TICKER_EXISTS`). V7 removed existing duplicates by keeping the most recently edited row; the Camunda processes of the removed cards are cancelled silently at startup (no "card deleted" toast/email).
-- **Search on every table** — each table (watchlist, price alerts, Support, Resistance, positions) has a search box filtering by ticker or company name.
+- **Search on every table** — the price alerts, Support, Resistance and positions tables have a search box filtering by ticker or company name. The **watchlist** table has a **funnel icon** in its top-right corner instead: it opens a small filter field (frontend only, ticker or name; the icon turns yellow while a filter is active, Esc clears it), so the only full search there is the add box (search by name/ticker via the Massive MCP server).
 - **Chat with the AI assistant** — ask about their portfolio, get analysis, and have the AI execute trades and manage the watchlist through natural language
 - **Manage the watchlist** — add/remove tickers manually or via the AI chat
+  - **Add by name or ticker (full-text search)**: the watchlist add box searches US stocks by company name or ticker (e.g. "enphase" → ENPH Enphase Energy, Inc.) through **Massive's (formerly Polygon.io) MCP server** (`mcp_massive`, compose service `massive-mcp`, tool `call_api` on `/v3/reference/tickers`), via `GET /api/tickers/search?q=`. Suggestions appear while typing (after 2 characters and a short pause); one match + Enter adds it, several matches open a list to pick from (arrow keys / click), stocks already watched are greyed out. Results are cached 10 minutes per query (the free Massive plan allows few calls per minute). Without a Massive key, or when the MCP server is down or rate-limited, the search answers 503 and a valid ticker symbol is added as typed.
 
 ### Visual Design
 
@@ -103,8 +104,9 @@ The whole stack is started with a single `docker compose up`. The browser only t
 | `app` | Spring Boot: REST + SSE, market data, AI chat, Camunda job workers (`finally-notify`, `email-notify`), serves the Angular build |
 | `postgres` | Postgres 16 (Flyway migrations V1–V5) |
 | `camunda` + `camunda-elasticsearch` | Camunda 8.8 with Operate/Tasklist; runs the `kanban-card` BPMN |
-| `keycloak` | Keycloak 26: login/registration, Google/Facebook brokering, FinAlly login theme |
+| `keycloak` | Keycloak 26: login/registration, Google/Facebook brokering, Tradex login theme |
 | `email-mcp` | Email MCP server (`send_email` tool over Streamable HTTP) relaying to the SMTP provider |
+| `massive-mcp` | Massive (formerly Polygon.io) MCP server `mcp_massive` (Streamable HTTP, internal `8000/mcp`): watchlist search by name / ticker |
 | `mailpit` | Local mail catcher used when no SMTP provider is configured |
 
 ### Why These Choices
@@ -366,7 +368,7 @@ If a trade fails validation (e.g., insufficient cash), the error is included in 
 
 ### System Prompt Guidance
 
-The LLM should be prompted as "FinAlly, an AI trading assistant" with instructions to:
+The LLM should be prompted as "Tradex, an AI trading assistant" with instructions to:
 - Analyze portfolio composition, risk concentration, and P&L
 - Suggest trades with reasoning
 - Execute trades when the user asks or agrees

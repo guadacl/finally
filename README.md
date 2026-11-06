@@ -1,4 +1,4 @@
-# FinAlly — AI Trading Workstation
+# Tradex — AI Trading Workstation
 
 A Bloomberg-style trading workstation in the browser: live market data, a simulated $10,000 portfolio, an AI
 copilot that analyses positions and trades on your behalf, and Support / Resistance price targets that notify you
@@ -41,7 +41,7 @@ Built entirely by coding agents as a capstone project for an agentic AI coding c
 
 **Accounts (Keycloak)**
 - Each user has their own portfolio, watchlist, alerts, board and chat.
-- **Custom FinAlly login page** (Keycloak theme): username/password, "remember me", password reset, self-registration,
+- **Custom Tradex login page** (Keycloak theme): username/password, "remember me", password reset, self-registration,
   and **Sign in with Google / Facebook** once their OAuth credentials are configured.
 
 ## Architecture
@@ -53,7 +53,7 @@ Everything runs with Docker Compose; the browser only talks to the app on port 8
 | `app` | Spring Boot (Java 21) — REST API (spec-first OpenAPI), SSE streams, market data, AI chat, Camunda job workers; serves the Angular build | `8000` |
 | `postgres` | Postgres 16 — app data, Flyway migrations (`backend/db`) | `127.0.0.1:5432` (dev) |
 | `camunda` + `camunda-elasticsearch` | Camunda 8.8 (Zeebe + Operate/Tasklist) running the `kanban-card` BPMN (`camunda/bpmn`) | `127.0.0.1:8081` (Operate) |
-| `keycloak` | Keycloak 26 — login, registration, Google/Facebook brokering, FinAlly login theme | `127.0.0.1:8180` |
+| `keycloak` | Keycloak 26 — login, registration, Google/Facebook brokering, Tradex login theme | `127.0.0.1:8180` |
 | `email-mcp` | Node MCP server (`mcp/email-mcp-server`) exposing `send_email` over Streamable HTTP, relaying to SMTP | internal |
 | `mailpit` | Local catch-all SMTP + web inbox, used when no mail provider is configured | `127.0.0.1:8025` |
 
@@ -70,7 +70,7 @@ docker compose up -d --build  # or scripts/start_windows.ps1 / scripts/start_mac
 
 | URL | |
 |---|---|
-| http://localhost:8000 | FinAlly |
+| http://localhost:8000 | Tradex |
 | http://localhost:8180/admin | Keycloak admin console (`admin` / `admin` by default) |
 | http://localhost:8081 | Camunda Operate (process instances) |
 | http://localhost:8025 | Mailpit inbox (emails when no SMTP provider is set) |
@@ -103,7 +103,7 @@ finally/
 ├── backend/                  # Maven: contracts, db (Flyway), workflow (Camunda), app (Spring Boot)
 │   └── openapi/openapi.yaml  # API spec (spec-first)
 ├── camunda/bpmn/             # kanban-card process (gateway on column, notify + email tasks)
-├── keycloak/                 # realm import, FinAlly login theme, social-login scripts
+├── keycloak/                 # realm import, Tradex login theme, social-login scripts
 ├── mcp/email-mcp-server/     # MCP server with the send_email tool (SMTP)
 ├── mailpit/                  # local mail catcher (compose include)
 ├── planning/                 # PLAN.md (spec), CONTRACTS.md (build contract), agent docs

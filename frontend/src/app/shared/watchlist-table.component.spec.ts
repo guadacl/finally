@@ -42,30 +42,49 @@ describe('WatchlistTableComponent', () => {
     expect(q('watchlist-name-ZZZZ')!.textContent!.trim()).toBe('—');
   });
 
-  it('filters rows by ticker or company name from the search box', async () => {
+  it('filters rows on the frontend from the funnel icon in the table corner', async () => {
     const fixture = TestBed.createComponent(WatchlistTableComponent);
     fixture.componentRef.setInput('showName', true);
     fixture.detectChanges();
     await fixture.whenStable();
     const root: HTMLElement = fixture.nativeElement;
+    const q = (id: string) => root.querySelector(`[data-testid="${id}"]`) as HTMLElement | null;
     const rows = () => Array.from(root.querySelectorAll('tbody tr[data-testid^="watchlist-row-"]')).map((r) => r.getAttribute('data-testid'));
-    const search = root.querySelector('[data-testid="watchlist-search"]') as HTMLInputElement;
+
+    // no second search field any more: only the icon, the filter opens on click
+    expect(q('watchlist-search')).toBeNull();
+    expect(q('watchlist-filter')).toBeNull();
+    q('watchlist-filter-toggle')!.click();
+    await fixture.whenStable();
+    const filter = q('watchlist-filter') as HTMLInputElement;
+    expect(document.activeElement).toBe(filter); // ready to type
     const type = async (v: string) => {
-      search.value = v;
-      search.dispatchEvent(new Event('input'));
+      filter.value = v;
+      filter.dispatchEvent(new Event('input'));
       await fixture.whenStable();
     };
 
     await type('enphase');
     expect(rows()).toEqual(['watchlist-row-ENPH']);
+    expect(q('watchlist-filter-toggle')!.className).toContain('text-accent'); // active filter is highlighted
     await type('zz');
     expect(rows()).toEqual(['watchlist-row-ZZZZ']);
     await type('nothing');
     expect(rows()).toEqual([]);
-    expect(root.querySelector('[data-testid="watchlist-no-match"]')!.textContent).toContain('nothing');
-    (root.querySelector('[data-testid="watchlist-search-clear"]') as HTMLButtonElement).click();
+    expect(q('watchlist-no-match')!.textContent).toContain('nothing');
+
+    // closing the panel keeps the filter; Esc clears it and closes the panel
+    q('watchlist-filter-toggle')!.click();
     await fixture.whenStable();
+    expect(q('watchlist-filter-panel')).toBeNull();
+    expect(rows()).toEqual([]);
+    q('watchlist-filter-toggle')!.click();
+    await fixture.whenStable();
+    q('watchlist-filter')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    await fixture.whenStable();
+    expect(q('watchlist-filter-panel')).toBeNull();
     expect(rows()).toEqual(['watchlist-row-ENPH', 'watchlist-row-ZZZZ']);
+    expect(q('watchlist-filter-toggle')!.className).toContain('text-muted');
   });
 
   it('leaves the name out by default (Markets panel)', async () => {

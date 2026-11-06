@@ -13,8 +13,8 @@ import { PriceFlashDirective } from '../shared/price-flash.directive';
   template: `
     <header class="flex h-12 items-center gap-6 border-b border-edge bg-panel-2 px-4">
       <a routerLink="/markets" class="flex items-center gap-2 select-none">
-        <span class="flex h-7 w-7 items-center justify-center rounded bg-accent text-sm font-black text-bg">F</span>
-        <span class="text-base font-bold tracking-tight">Fin<span class="text-accent">Ally</span></span>
+        <span class="flex h-7 w-7 items-center justify-center rounded bg-accent text-sm font-black text-bg">T</span>
+        <span class="text-base font-bold tracking-tight" data-testid="brand">Trade<span class="text-accent">x</span></span>
         <span class="hidden text-[10px] tracking-widest text-muted uppercase lg:inline">AI Trading Workstation</span>
       </a>
 

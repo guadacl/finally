@@ -9,7 +9,7 @@
     <version>1.0.0-SNAPSHOT</version>
   </parent>
   <artifactId>finally-workflow</artifactId>
-  <name>FinAlly Camunda workflow</name>
+  <name>Tradex Camunda workflow</name>
   <description>Camunda 8 client, BPMN deployment and job workers. Owned by the Camunda agent.</description>
 
   <dependencies>

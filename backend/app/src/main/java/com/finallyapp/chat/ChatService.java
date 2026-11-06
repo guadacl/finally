@@ -39,7 +39,7 @@ public class ChatService {
     private static final Logger log = LoggerFactory.getLogger(ChatService.class);
 
     static final String SYSTEM_PROMPT = """
-            You are FinAlly, an AI trading assistant inside a simulated trading workstation (fake money, zero stakes).
+            You are Tradex, an AI trading assistant inside a simulated trading workstation (fake money, zero stakes).
             - Analyze the user's portfolio composition, risk concentration and P&L.
             - Suggest trades with brief reasoning. Execute trades when the user asks or agrees, by listing them in "trades".
             - Manage the watchlist proactively via "watchlist_changes" (action "add" or "remove").

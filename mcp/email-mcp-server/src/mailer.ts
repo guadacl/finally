@@ -35,7 +35,7 @@ export function mailConfigFromEnv(env: NodeJS.ProcessEnv = process.env): MailCon
     port: Number.isFinite(port) ? port : 1025,
     username: env.MAIL_USERNAME?.trim() || undefined,
     password: env.MAIL_PASSWORD || undefined,
-    from: env.MAIL_FROM?.trim() || "FinAlly <alerts@finally.local>",
+    from: env.MAIL_FROM?.trim() || "Tradex <alerts@finally.local>",
     startTls: flag(env.MAIL_STARTTLS),
     secure: flag(env.MAIL_SECURE, port === 465),
   };

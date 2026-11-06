@@ -1,5 +1,5 @@
 <#
-  Start FinAlly (app + postgres + camunda) with Docker Compose. Idempotent.
+  Start Tradex (app + postgres + camunda) with Docker Compose. Idempotent.
     .\scripts\start_windows.ps1            start (builds the image the first time)
     .\scripts\start_windows.ps1 -Build     force a rebuild
     .\scripts\start_windows.ps1 -NoOpen    don't open the browser
@@ -37,7 +37,7 @@ docker image inspect finally-app:latest *> $null
 if ($LASTEXITCODE -ne 0) { $imageExists = $false }
 if ($Build -or -not $imageExists) { $composeArgs += '--build' }
 
-Write-Host 'Starting FinAlly...'
+Write-Host 'Starting Tradex...'
 & docker @composeArgs
 if ($LASTEXITCODE -ne 0) {
     Write-Error 'docker compose up failed.'
@@ -51,7 +51,7 @@ for ($i = 0; $i -lt 90; $i++) {
         if ($r.StatusCode -eq 200) {
             Write-Host ' ok'
             Write-Host ''
-            Write-Host "FinAlly is running:  $url"
+            Write-Host "Tradex is running:  $url"
             Write-Host 'Camunda Operate:     http://localhost:8081  (demo / demo)'
             if (-not $NoOpen) { Start-Process $url }
             exit 0
@@ -64,5 +64,5 @@ for ($i = 0; $i -lt 90; $i++) {
 }
 
 Write-Host ''
-Write-Error 'FinAlly did not become healthy in time. Check the logs with: docker compose logs app'
+Write-Error 'Tradex did not become healthy in time. Check the logs with: docker compose logs app'
 exit 1

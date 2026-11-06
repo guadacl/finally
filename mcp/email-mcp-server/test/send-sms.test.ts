@@ -26,7 +26,7 @@ function setup() {
 }
 
 async function client(sms: ReturnType<typeof setup>["sms"]) {
-  const server = createEmailServer({ transport: smtp, from: "FinAlly <a@b.co>", sms });
+  const server = createEmailServer({ transport: smtp, from: "Tradex <a@b.co>", sms });
   const [c, s] = InMemoryTransport.createLinkedPair();
   await server.connect(s);
   const cl = new Client({ name: "t", version: "1" });
@@ -48,17 +48,17 @@ describe("send_sms tool", () => {
     const cl = await client(sms);
     const result = await cl.callTool({
       name: "send_sms",
-      arguments: { to: "+32470123456", text: "FinAlly: AAPL hit Support 185.00 (now 184.97)" },
+      arguments: { to: "+32470123456", text: "Tradex: AAPL hit Support 185.00 (now 184.97)" },
     });
     expect(result.isError).toBeFalsy();
     const structured = result.structuredContent as { messageId: string; provider: string; truncated: boolean };
     expect(structured.provider).toBe("log");
     expect(structured.truncated).toBe(false);
     expect(structured.messageId).toMatch(/^log-/);
-    expect(lines).toEqual(["[sms] to +3247*****56 : FinAlly: AAPL hit Support 185.00 (now 184.97)"]);
+    expect(lines).toEqual(["[sms] to +3247*****56 : Tradex: AAPL hit Support 185.00 (now 184.97)"]);
     expect(lines[0]).not.toContain("+32470123456");
     expect(outbox.list()).toEqual([
-      expect.objectContaining({ to: "+3247*****56", text: "FinAlly: AAPL hit Support 185.00 (now 184.97)", provider: "log" }),
+      expect.objectContaining({ to: "+3247*****56", text: "Tradex: AAPL hit Support 185.00 (now 184.97)", provider: "log" }),
     ]);
   });
 
@@ -140,14 +140,14 @@ describe("GET /sms/outbox", () => {
   it("shows SMS sent over Streamable HTTP and is read-only", async () => {
     const cl = new Client({ name: "http", version: "1" });
     await cl.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`)));
-    await cl.callTool({ name: "send_sms", arguments: { to: "+32470123456", text: "FinAlly: new Support card AAPL @ 185.00" } });
+    await cl.callTool({ name: "send_sms", arguments: { to: "+32470123456", text: "Tradex: new Support card AAPL @ 185.00" } });
     await cl.close();
 
     const res = await fetch(`${base}/sms/outbox`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as { count: number; messages: Array<{ to: string; text: string }> };
     expect(body.count).toBe(1);
-    expect(body.messages[0]).toMatchObject({ to: "+3247*****56", text: "FinAlly: new Support card AAPL @ 185.00" });
+    expect(body.messages[0]).toMatchObject({ to: "+3247*****56", text: "Tradex: new Support card AAPL @ 185.00" });
     expect((await fetch(`${base}/sms/outbox`, { method: "DELETE" })).status).toBe(405);
   });
 });

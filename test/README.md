@@ -1,4 +1,4 @@
-# FinAlly E2E tests (Playwright)
+# Tradex E2E tests (Playwright)
 
 The app must run with `LLM_MOCK=true` (deterministic chat: "buy 2 AAPL" buys 2 AAPL, "sell 500 TSLA" fails,
 "add PYPL to my watchlist" adds PYPL, any other message gets a fixed analysis reply).

@@ -1,7 +1,9 @@
 package com.finallyapp.watchlist;
 
 import com.finallyapp.api.WatchlistApi;
+import com.finallyapp.api.model.TickerSearchResult;
 import com.finallyapp.api.model.WatchlistAddRequest;
+import com.finallyapp.market.TickerSearchService;
 import com.finallyapp.api.model.WatchlistItem;
 import java.util.List;
 import org.springframework.http.HttpStatus;
@@ -12,9 +14,16 @@ import org.springframework.web.bind.annotation.RestController;
 public class WatchlistController implements WatchlistApi {
 
     private final WatchlistService service;
+    private final TickerSearchService search;
 
-    public WatchlistController(WatchlistService service) {
+    public WatchlistController(WatchlistService service, TickerSearchService search) {
         this.service = service;
+        this.search = search;
+    }
+
+    @Override
+    public ResponseEntity<List<TickerSearchResult>> searchTickers(String q) {
+        return ResponseEntity.ok(search.search(q));
     }
 
     @Override

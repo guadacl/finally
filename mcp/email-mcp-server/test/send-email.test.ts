@@ -8,7 +8,7 @@ import { createEmailServer } from "../src/server.js";
 import { createHttpServer } from "../src/http.js";
 import { mailConfigFromEnv, type MailTransport } from "../src/mailer.js";
 
-const FROM = "FinAlly <alerts@finally.local>";
+const FROM = "Tradex <alerts@finally.local>";
 
 function mockTransport(): MailTransport & { sendMail: ReturnType<typeof vi.fn> } {
   return {
@@ -40,14 +40,14 @@ describe("send_email tool", () => {
     const client = await inMemoryClient(smtp);
     const result = await client.callTool({
       name: "send_email",
-      arguments: { to: "demo@finally.local", subject: "FinAlly alert: AAPL hit Support 185.00", text: "body" },
+      arguments: { to: "demo@finally.local", subject: "Tradex alert: AAPL hit Support 185.00", text: "body" },
     });
     expect(result.isError).toBeFalsy();
     expect(result.structuredContent).toEqual({ messageId: "<abc@finally>", accepted: ["demo@finally.local"], rejected: [] });
     expect(smtp.sendMail).toHaveBeenCalledWith({
       from: FROM,
       to: "demo@finally.local",
-      subject: "FinAlly alert: AAPL hit Support 185.00",
+      subject: "Tradex alert: AAPL hit Support 185.00",
       text: "body",
     });
   });

@@ -1,4 +1,4 @@
-# Notification MCP server for FinAlly (service name kept as email-mcp; included by the root docker-compose.yml).
+# Notification MCP server for Tradex (service name kept as email-mcp; included by the root docker-compose.yml).
 #
 # The app's Camunda "email-notify" / "sms-notify" workers call this server's send_email / send_sms tools (MCP over
 # Streamable HTTP, http://email-mcp:3001/mcp); it relays emails over SMTP and SMS via SMS_PROVIDER (default: log).
@@ -21,7 +21,7 @@ services:
       MAIL_PORT: ${MAIL_PORT:-1025}
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
-      MAIL_FROM: ${MAIL_FROM:-FinAlly <alerts@finally.local>}
+      MAIL_FROM: ${MAIL_FROM:-Tradex <alerts@finally.local>}
       MAIL_STARTTLS: ${MAIL_STARTTLS:-false}
       MAIL_SECURE: ${MAIL_SECURE:-}
       # send_sms provider: "log" (default) writes each SMS as one log line (masked number), no real SMS, no cost.

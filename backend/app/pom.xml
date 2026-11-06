@@ -9,7 +9,7 @@
     <version>1.0.0-SNAPSHOT</version>
   </parent>
   <artifactId>finally-app</artifactId>
-  <name>FinAlly application</name>
+  <name>Tradex application</name>
   <description>Spring Boot app (runnable jar). Owned by the Backend agent.</description>
 
   <properties>
