@@ -167,6 +167,13 @@ public class TickerNames {
         return ticker == null ? "" : ticker.trim().toUpperCase(Locale.ROOT);
     }
 
+    /** Caches a name learnt elsewhere (e.g. from the ticker search), so it shows without a lookup. */
+    public void remember(String ticker, String name) {
+        if (ticker != null && !ticker.isBlank() && name != null && !name.isBlank()) {
+            names.putIfAbsent(normalize(ticker), name.trim());
+        }
+    }
+
     void lookup(String ticker) {
         try {
             String name = massive != null ? fromMassive(ticker) : null;

@@ -1,11 +1,11 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { WatchlistItem, errorMessage } from '../api/models';
 import { PriceStreamService } from '../core/price-stream.service';
-import { TICKER_PATTERN, WatchlistService, changePercent, normalizeTicker } from '../core/watchlist.service';
+import { WatchlistService, changePercent } from '../core/watchlist.service';
 import { PctPipe, PricePipe, signClass } from './format';
 import { PriceFlashDirective } from './price-flash.directive';
 import { SearchBoxComponent, matchesSearch } from './search-box.component';
+import { StockSearchAddComponent } from './stock-search-add.component';
 import { SparklineComponent } from './sparkline.component';
 
 /** One watchlist row; reads its ticker's live price signal. */
@@ -81,28 +81,14 @@ export class WatchlistRowComponent {
 @Component({
   selector: 'app-watchlist-table',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, WatchlistRowComponent, SearchBoxComponent],
+  imports: [WatchlistRowComponent, SearchBoxComponent, StockSearchAddComponent],
   host: { class: 'flex min-h-0 flex-col' },
   template: `
     @if (showAdd()) {
-      <form class="flex gap-2 border-b border-edge p-2" (ngSubmit)="add()">
-        <input
-          name="watchTicker"
-          data-testid="watchlist-add-input"
-          class="field num w-28 min-w-0 flex-1 uppercase"
-          placeholder="Add ticker"
-          autocomplete="off"
-          maxlength="10"
-          [ngModel]="draft()"
-          (ngModelChange)="draft.set($event); error.set(null)"
-        />
-        <button type="submit" data-testid="watchlist-add-button" class="btn btn-submit" [disabled]="busy() || !draft().trim()">
-          Add
-        </button>
-      </form>
-      @if (error(); as e) {
-        <div data-testid="watchlist-error" class="border-b border-edge bg-down/10 px-2 py-1 text-xs text-down">{{ e }}</div>
-      }
+      <app-stock-search-add class="border-b border-edge" />
+    }
+    @if (error(); as e) {
+      <div data-testid="watchlist-remove-error" class="border-b border-edge bg-down/10 px-2 py-1 text-xs text-down">{{ e }}</div>
     }
     <div class="border-b border-edge px-2 py-1.5">
       <app-search-box [(query)]="search" [fullWidth]="true" testId="watchlist-search" />
@@ -167,30 +153,7 @@ export class WatchlistTableComponent {
   readonly search = signal('');
   readonly visibleItems = computed(() => this.watchlist.items().filter((i) => matchesSearch(this.search(), i.ticker, i.name)));
 
-  readonly draft = signal('');
   readonly error = signal<string | null>(null);
-  readonly busy = signal(false);
-
-  add(): void {
-    const ticker = normalizeTicker(this.draft());
-    if (!ticker) return;
-    if (!TICKER_PATTERN.test(ticker)) {
-      this.error.set(`"${ticker}" is not a valid ticker`);
-      return;
-    }
-    this.busy.set(true);
-    this.watchlist.add(ticker).subscribe({
-      next: () => {
-        this.busy.set(false);
-        this.draft.set('');
-        this.error.set(null);
-      },
-      error: (err) => {
-        this.busy.set(false);
-        this.error.set(errorMessage(err, `Could not add ${ticker}`));
-      },
-    });
-  }
 
   removeTicker(ticker: string): void {
     this.watchlist.remove(ticker).subscribe({

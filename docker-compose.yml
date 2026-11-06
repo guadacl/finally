@@ -8,6 +8,7 @@
 #   keycloak/compose.keycloak.yml -> service `keycloak`  (login, http://localhost:8180)
 #   mailpit/compose.mailpit.yml   -> service `mailpit`   (catches alert emails, http://localhost:8025)
 #   mcp/email-mcp-server/compose.email-mcp.yml -> service `email-mcp` (MCP send_email tool -> SMTP, internal)
+#   mcp/massive-mcp-server/compose.massive-mcp.yml -> service `massive-mcp` (Massive/Polygon MCP: ticker search)
 
 name: finally
 
@@ -17,6 +18,7 @@ include:
   - keycloak/compose.keycloak.yml
   - mailpit/compose.mailpit.yml
   - mcp/email-mcp-server/compose.email-mcp.yml
+  - mcp/massive-mcp-server/compose.massive-mcp.yml
 
 services:
   app:
@@ -45,6 +47,8 @@ services:
       # SMS in parallel with each email (same MCP server, tool send_sms; provider SMS_PROVIDER on email-mcp)
       SMS_ENABLED: ${SMS_ENABLED:-true}
       EMAIL_MCP_URL: ${EMAIL_MCP_URL:-http://email-mcp:3001/mcp}
+      # Watchlist search by name / ticker: Massive (Polygon.io) MCP server, tool call_api -> /v3/reference/tickers
+      MASSIVE_MCP_URL: ${MASSIVE_MCP_URL:-http://massive-mcp:8000/mcp}
       APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost:${APP_PORT:-8000}}
     ports:
       - "${APP_PORT:-8000}:8000"   # set APP_PORT in .env if 8000 is taken on the host
@@ -58,6 +62,9 @@ services:
         condition: service_started
       # alert emails are best effort: the app runs (and keeps alerting in the browser) without the mail services
       email-mcp:
+        condition: service_started
+      # the search is best effort too: without it tickers are still added by symbol
+      massive-mcp:
         condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8000/api/health || exit 1"]

@@ -116,6 +116,16 @@ export interface WatchlistAddRequest {
   ticker: string;
 }
 
+/** `GET /api/tickers/search?q=` — a stock found by name or ticker (Massive / Polygon.io MCP server). */
+export interface TickerSearchResult {
+  ticker: string;
+  name: string;
+  /** Primary exchange MIC, e.g. XNAS, XNYS. */
+  exchange?: string | null;
+  /** Security type, e.g. CS (common stock), ETF, ADRC. */
+  type?: string | null;
+}
+
 export interface WatchlistItem {
   ticker: string;
   /** Company name, e.g. "Enphase Energy, Inc." (null while unknown). */

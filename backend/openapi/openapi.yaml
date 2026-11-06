@@ -159,6 +159,34 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
 
+  /api/tickers/search:
+    get:
+      tags: [watchlist]
+      operationId: searchTickers
+      description: |
+        Full-text search for US stocks by company name or ticker, used to add a stock to the watchlist.
+        Answered by the Massive (formerly Polygon.io) MCP server (tool `call_api` on `/v3/reference/tickers`).
+        Best match first: exact ticker, then tickers starting with the query, then names. At most 20 results.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, maxLength: 50 }
+          description: Part of a company name or ticker, e.g. "enphase" or "ENPH"
+      responses:
+        '200':
+          description: Matching stocks (empty when nothing matches or the query is blank)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/TickerSearchResult' }
+        '503':
+          description: The search service is unavailable (no Massive key, MCP server down or rate-limited); add by ticker instead
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
   /api/watchlist/{ticker}:
     delete:
       tags: [watchlist]
@@ -467,6 +495,15 @@ components:
       properties:
         totalValue: { type: number }
         recordedAt: { type: string, format: date-time }
+
+    TickerSearchResult:
+      type: object
+      required: [ticker, name]
+      properties:
+        ticker: { type: string, example: ENPH }
+        name: { type: string, example: 'Enphase Energy, Inc.' }
+        exchange: { type: string, nullable: true, description: 'Primary exchange MIC, e.g. XNAS, XNYS', example: XNAS }
+        type: { type: string, nullable: true, description: 'Security type, e.g. CS (common stock), ETF, ADRC', example: CS }
 
     WatchlistAddRequest:
       type: object

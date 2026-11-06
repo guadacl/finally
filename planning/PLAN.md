@@ -49,6 +49,7 @@ Implemented menu: **Markets** (watchlist + chart + trade bar), **Watchlists** (m
 - **Search on every table** — each table (watchlist, price alerts, Support, Resistance, positions) has a search box filtering by ticker or company name.
 - **Chat with the AI assistant** — ask about their portfolio, get analysis, and have the AI execute trades and manage the watchlist through natural language
 - **Manage the watchlist** — add/remove tickers manually or via the AI chat
+  - **Add by name or ticker (full-text search)**: the watchlist add box searches US stocks by company name or ticker (e.g. "enphase" → ENPH Enphase Energy, Inc.) through **Massive's (formerly Polygon.io) MCP server** (`mcp_massive`, compose service `massive-mcp`, tool `call_api` on `/v3/reference/tickers`), via `GET /api/tickers/search?q=`. Suggestions appear while typing (after 2 characters and a short pause); one match + Enter adds it, several matches open a list to pick from (arrow keys / click), stocks already watched are greyed out. Results are cached 10 minutes per query (the free Massive plan allows few calls per minute). Without a Massive key, or when the MCP server is down or rate-limited, the search answers 503 and a valid ticker symbol is added as typed.
 
 ### Visual Design
 
@@ -105,6 +106,7 @@ The whole stack is started with a single `docker compose up`. The browser only t
 | `camunda` + `camunda-elasticsearch` | Camunda 8.8 with Operate/Tasklist; runs the `kanban-card` BPMN |
 | `keycloak` | Keycloak 26: login/registration, Google/Facebook brokering, Tradex login theme |
 | `email-mcp` | Email MCP server (`send_email` tool over Streamable HTTP) relaying to the SMTP provider |
+| `massive-mcp` | Massive (formerly Polygon.io) MCP server `mcp_massive` (Streamable HTTP, internal `8000/mcp`): watchlist search by name / ticker |
 | `mailpit` | Local mail catcher used when no SMTP provider is configured |
 
 ### Why These Choices

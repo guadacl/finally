@@ -121,6 +121,12 @@ finally:
     finnhub-call-spacing: ${FINNHUB_CALL_SPACING:1100ms}
     simulator-interval: 500ms
     event-probability: 0.001
+  search:
+    # Watchlist search by name / ticker through the Massive (formerly Polygon.io) MCP server (compose service
+    # massive-mcp, tool call_api -> /v3/reference/tickers). Blank = search unavailable (add tickers by symbol).
+    mcp-url: ${MASSIVE_MCP_URL:}
+    timeout: ${MASSIVE_MCP_TIMEOUT:15s}
+    cache-ttl: ${TICKER_SEARCH_CACHE_TTL:10m}
   stream:
     price-interval-ms: 500
     heartbeat-ms: 15000
