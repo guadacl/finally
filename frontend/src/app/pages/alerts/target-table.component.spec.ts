@@ -79,10 +79,14 @@ describe('TargetTableComponent', () => {
     expect(q('target-name-s2')!.textContent!.trim()).toBe('—'); // name not known yet
   });
 
-  it('filters cards by ticker or company name from the search box', async () => {
+  it('filters cards by ticker or company name from the funnel icon', async () => {
     const { fixture, root, q } = render('SUPPORT');
     const rows = () => Array.from(root.querySelectorAll('tbody tr[data-testid^="target-row-"]')).map((r) => r.getAttribute('data-testid'));
-    const search = q('target-search-SUPPORT') as HTMLInputElement;
+    expect(q('target-search-SUPPORT')).toBeNull(); // no search field any more
+    expect(q('target-filter-SUPPORT')).toBeNull(); // the filter opens from the icon
+    q('target-filter-SUPPORT-toggle')!.click();
+    await fixture.whenStable();
+    const search = q('target-filter-SUPPORT') as HTMLInputElement;
     search.value = 'apple';
     search.dispatchEvent(new Event('input'));
     await fixture.whenStable();

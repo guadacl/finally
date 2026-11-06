@@ -11,7 +11,8 @@ import { WatchlistService } from '../../core/watchlist.service';
 import { PricePipe, VolumePipe } from '../../shared/format';
 import { PriceFlashDirective } from '../../shared/price-flash.directive';
 import { rsiClass, rsiTitle } from '../../shared/rsi';
-import { SearchBoxComponent, matchesSearch } from '../../shared/search-box.component';
+import { FilterButtonComponent } from '../../shared/filter-button.component';
+import { matchesSearch } from '../../shared/search-box.component';
 import { TargetTableComponent } from './target-table.component';
 
 /** How often the list is reloaded for fresh day high/low, volume and RSI. */
@@ -29,7 +30,7 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
 @Component({
   selector: 'app-alerts-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, DatePipe, PricePipe, VolumePipe, PriceFlashDirective, TargetTableComponent, SearchBoxComponent],
+  imports: [FormsModule, RouterLink, DatePipe, PricePipe, VolumePipe, PriceFlashDirective, TargetTableComponent, FilterButtonComponent],
   host: { class: 'block h-full' },
   template: `
     <div class="mx-auto flex h-full max-w-[1500px] flex-col gap-2 overflow-auto">
@@ -38,7 +39,6 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
         <span>Price alerts</span>
         <div class="flex items-center gap-3 normal-case tracking-normal">
           <span class="num">{{ alerts.alerts().length }} alerts · prices stream live</span>
-          <app-search-box [(query)]="search" testId="alerts-search" />
           <button
             type="button"
             data-testid="alerts-add-button"
@@ -50,6 +50,7 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
           >
             {{ formOpen() ? '×' : '+' }}
           </button>
+          <app-filter-button [(query)]="search" testId="alerts-filter" />
         </div>
       </div>
 

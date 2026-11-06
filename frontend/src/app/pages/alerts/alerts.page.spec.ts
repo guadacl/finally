@@ -169,6 +169,25 @@ describe('AlertsPage', () => {
     expect(q(root, 'alerts-name-v1')!.textContent!.trim()).toBe('Apple Inc.');
   });
 
+  it('filters the price alerts from the funnel icon in the table corner', async () => {
+    const fixture = TestBed.createComponent(AlertsPage);
+    fixture.detectChanges();
+    http.expectOne('/api/alerts').flush([
+      { id: 'f1', ticker: 'AAPL', name: 'Apple Inc.', lowerLimit: 100, createdAt: '2026-11-03T10:00:00Z' },
+      { id: 'f2', ticker: 'MSFT', name: 'Microsoft Corporation', upperLimit: 600, createdAt: '2026-11-03T10:00:00Z' },
+    ]);
+    await fixture.whenStable();
+    const root: HTMLElement = fixture.nativeElement;
+    const rows = () => Array.from(root.querySelectorAll('tr[data-testid^="alerts-row-"]')).map((r) => r.getAttribute('data-testid'));
+    expect(q(root, 'alerts-search')).toBeNull(); // no search field any more
+    q(root, 'alerts-filter-toggle')!.click();
+    await fixture.whenStable();
+    type(q(root, 'alerts-filter'), 'micro');
+    await fixture.whenStable();
+    expect(rows()).toEqual(['alerts-row-f2']);
+    expect(q(root, 'alerts-filter-toggle')!.className).toContain('text-accent');
+  });
+
   it('deletes an alert', async () => {
     const fixture = TestBed.createComponent(AlertsPage);
     fixture.detectChanges();

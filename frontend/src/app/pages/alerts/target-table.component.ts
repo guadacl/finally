@@ -10,7 +10,8 @@ import { TICKER_PATTERN, normalizeTicker } from '../../core/watchlist.service';
 import { PctPipe, PricePipe, VolumePipe } from '../../shared/format';
 import { PriceFlashDirective } from '../../shared/price-flash.directive';
 import { fmtRsi, rsiClass, rsiTitle } from '../../shared/rsi';
-import { SearchBoxComponent, matchesSearch } from '../../shared/search-box.component';
+import { FilterButtonComponent } from '../../shared/filter-button.component';
+import { matchesSearch } from '../../shared/search-box.component';
 
 /**
  * One Support or Resistance table on the Alerts page: the cards of one kanban column shown with the same market
@@ -20,7 +21,7 @@ import { SearchBoxComponent, matchesSearch } from '../../shared/search-box.compo
 @Component({
   selector: 'app-target-table',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, DatePipe, PricePipe, PctPipe, VolumePipe, PriceFlashDirective, SearchBoxComponent],
+  imports: [FormsModule, DatePipe, PricePipe, PctPipe, VolumePipe, PriceFlashDirective, FilterButtonComponent],
   host: { class: 'block' },
   template: `
     <section class="panel flex h-full flex-col overflow-hidden" [attr.data-testid]="'target-table-' + column()">
@@ -34,7 +35,6 @@ import { SearchBoxComponent, matchesSearch } from '../../shared/search-box.compo
         </span>
         <div class="flex items-center gap-3 normal-case tracking-normal">
           <span class="num">{{ rows().length }} {{ rows().length === 1 ? 'card' : 'cards' }} · notifies once · via Camunda</span>
-          <app-search-box [(query)]="search" [testId]="'target-search-' + column()" />
           <button
             type="button"
             class="btn btn-submit flex h-7 w-7 items-center justify-center p-0 text-lg leading-none"
@@ -46,6 +46,7 @@ import { SearchBoxComponent, matchesSearch } from '../../shared/search-box.compo
           >
             {{ formOpen() ? '×' : '+' }}
           </button>
+          <app-filter-button [(query)]="search" [testId]="'target-filter-' + column()" />
         </div>
       </div>
 
