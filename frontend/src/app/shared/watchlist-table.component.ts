@@ -90,9 +90,35 @@ export class WatchlistRowComponent {
     @if (error(); as e) {
       <div data-testid="watchlist-remove-error" class="border-b border-edge bg-down/10 px-2 py-1 text-xs text-down">{{ e }}</div>
     }
-    <div class="border-b border-edge px-2 py-1.5">
-      <app-search-box [(query)]="search" [fullWidth]="true" testId="watchlist-search" />
-    </div>
+    <div class="relative flex min-h-0 flex-1 flex-col">
+    <!-- Filter (frontend only): funnel icon in the table's top-right corner, opens a small field -->
+    <button
+      type="button"
+      data-testid="watchlist-filter-toggle"
+      class="absolute top-0.5 right-1 z-20 flex h-5 w-5 cursor-pointer items-center justify-center rounded hover:bg-edge"
+      [class.text-accent]="!!filter().trim()"
+      [class.text-muted]="!filter().trim()"
+      [attr.title]="filter().trim() ? 'Filter: ' + filter() : 'Filter the list'"
+      [attr.aria-label]="'Filter the list'"
+      [attr.aria-expanded]="filterOpen()"
+      (click)="toggleFilter()"
+    >
+      <svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">
+        <path d="M1.5 2h13a.5.5 0 0 1 .39.81L10 9v4.5a.5.5 0 0 1-.28.45l-3 1.5A.5.5 0 0 1 6 15V9L1.11 2.81A.5.5 0 0 1 1.5 2z" />
+      </svg>
+    </button>
+    @if (filterOpen()) {
+      <div class="absolute top-6 right-1 z-30 w-56 rounded border border-edge bg-panel-2 p-1.5 shadow-lg" data-testid="watchlist-filter-panel">
+        <app-search-box
+          [(query)]="filter"
+          [fullWidth]="true"
+          [autofocus]="true"
+          placeholder="Filter by ticker or name"
+          testId="watchlist-filter"
+          (escaped)="closeFilter()"
+        />
+      </div>
+    }
     <div class="min-h-0 flex-1 overflow-auto">
       <table class="grid-table">
         <thead>
@@ -125,8 +151,8 @@ export class WatchlistRowComponent {
           } @empty {
             <tr>
               <td colspan="7" class="py-6 text-center text-muted">
-                @if (search().trim() && watchlist.items().length > 0) {
-                  <span data-testid="watchlist-no-match">No tickers match "{{ search() }}"</span>
+                @if (filter().trim() && watchlist.items().length > 0) {
+                  <span data-testid="watchlist-no-match">No tickers match "{{ filter() }}"</span>
                 } @else {
                   {{ watchlist.loaded() ? 'Watchlist is empty' : 'Loading…' }}
                 }
@@ -135,6 +161,7 @@ export class WatchlistRowComponent {
           }
         </tbody>
       </table>
+    </div>
     </div>
   `,
 })
@@ -149,9 +176,20 @@ export class WatchlistTableComponent {
   readonly showName = input(false);
   readonly pick = output<string>();
 
-  /** Search text (ticker or company name). */
-  readonly search = signal('');
-  readonly visibleItems = computed(() => this.watchlist.items().filter((i) => matchesSearch(this.search(), i.ticker, i.name)));
+  /** Frontend-only filter of the rows (ticker or company name), opened from the funnel icon. */
+  readonly filter = signal('');
+  readonly filterOpen = signal(false);
+  readonly visibleItems = computed(() => this.watchlist.items().filter((i) => matchesSearch(this.filter(), i.ticker, i.name)));
+
+  toggleFilter(): void {
+    this.filterOpen.update((open) => !open);
+  }
+
+  /** Esc in the field: clear the filter and close it. */
+  closeFilter(): void {
+    this.filter.set('');
+    this.filterOpen.set(false);
+  }
 
   readonly error = signal<string | null>(null);
 
