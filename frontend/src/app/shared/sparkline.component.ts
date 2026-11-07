@@ -27,7 +27,7 @@ const MAX_SPARK_POINTS = 120;
       @if (points()) {
         <polyline [attr.points]="points()" fill="none" [attr.stroke]="color()" stroke-width="1.25" stroke-linejoin="round" />
       } @else {
-        <line x1="0" [attr.y1]="height() / 2" [attr.x2]="width()" [attr.y2]="height() / 2" stroke="#2a3240" stroke-dasharray="2 3" />
+        <line x1="0" [attr.y1]="height() / 2" [attr.x2]="width()" [attr.y2]="height() / 2" style="stroke: var(--color-edge)" stroke-dasharray="2 3" />
       }
     </svg>
   `,
