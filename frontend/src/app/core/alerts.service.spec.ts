@@ -82,6 +82,12 @@ describe('AlertsService', () => {
     post.flush(alert('b', 'MSFT'), { status: 201, statusText: 'Created' });
     expect(service.alerts().map((a) => a.id)).toEqual(['a', 'b']);
 
+    // re-adding MSFT: the server returns the same alert, updated (200) -> replaced in place, no duplicate row
+    service.create({ ticker: 'MSFT', upperLimit: 650, lowerLimit: null, comment: null }).subscribe();
+    http.expectOne({ method: 'POST', url: '/api/alerts' }).flush({ ...alert('b', 'MSFT'), upperLimit: 650 });
+    expect(service.alerts().map((a) => a.id)).toEqual(['a', 'b']);
+    expect(service.alerts()[1].upperLimit).toBe(650);
+
     service.remove('a').subscribe();
     http.expectOne({ method: 'DELETE', url: '/api/alerts/a' }).flush(null, { status: 204, statusText: 'No Content' });
     expect(service.alerts().map((a) => a.id)).toEqual(['b']);

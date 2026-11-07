@@ -35,6 +35,8 @@ public class McpToolClient {
 
     private static final Logger log = LoggerFactory.getLogger(McpToolClient.class);
 
+    private final String label;
+    private final String urlVariable;
     private final String baseUrl;
     private final String endpoint;
     private final Duration timeout;
@@ -45,7 +47,17 @@ public class McpToolClient {
     }
 
     McpToolClient(String mcpUrl, Duration timeout) {
+        this("Notification MCP server", "EMAIL_MCP_URL", mcpUrl, timeout);
+    }
+
+    /**
+     * A client for another MCP server (e.g. the Massive market-data MCP server used by the ticker search).
+     * {@code label} names the server in log and error messages, {@code urlVariable} the env variable that sets its URL.
+     */
+    public McpToolClient(String label, String urlVariable, String mcpUrl, Duration timeout) {
         String[] parts = split(mcpUrl);
+        this.label = label;
+        this.urlVariable = urlVariable;
         this.baseUrl = parts[0];
         this.endpoint = parts[1];
         this.timeout = timeout == null ? Duration.ofSeconds(10) : timeout;
@@ -107,11 +119,11 @@ public class McpToolClient {
             client = newClient();
             client.initialize();
             client.listTools();
-            log.info("Notification MCP server {} reachable (warm-up {} ms)", url(),
+            log.info("{} {} reachable (warm-up {} ms)", label, url(),
                     (System.nanoTime() - start) / 1_000_000);
             return true;
         } catch (RuntimeException e) {
-            log.info("Notification MCP server {} not reachable yet ({}); notifications will retry it when needed",
+            log.info("{} {} not reachable yet ({}); it is retried when needed", label,
                     url(), e.getMessage());
             return false;
         } finally {
@@ -133,12 +145,12 @@ public class McpToolClient {
      */
     public McpSchema.CallToolResult call(String tool, Map<String, Object> arguments) {
         if (!configured()) {
-            throw new ToolException("no notification MCP server configured (EMAIL_MCP_URL)");
+            throw new ToolException("no " + label + " configured (" + urlVariable + ")");
         }
         try {
             return attempt(tool, arguments);
         } catch (NotCalledYet e) {
-            log.info("Notification MCP server {} slow to answer; retrying {} once", url(), tool);
+            log.info("{} {} slow to answer; retrying {} once", label, url(), tool);
             try {
                 return attempt(tool, arguments);
             } catch (NotCalledYet again) {
@@ -167,7 +179,7 @@ public class McpToolClient {
             result = call.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
             closeLater(client, false);
-            String message = "notification MCP server " + url() + " unreachable: no answer within "
+            String message = label + " " + url() + " unreachable: no answer within "
                     + timeout.toSeconds() + " s";
             if (!called.get()) {
                 throw new NotCalledYet(message);
@@ -179,7 +191,7 @@ public class McpToolClient {
             throw new ToolException("interrupted while calling " + tool);
         } catch (ExecutionException e) {
             closeLater(client, false);
-            throw new ToolException("notification MCP server " + url() + " unreachable: "
+            throw new ToolException(label + " " + url() + " unreachable: "
                     + (e.getCause() == null ? e : e.getCause().getMessage()), e.getCause());
         }
         closeLater(client, true);
@@ -226,7 +238,7 @@ public class McpToolClient {
         return t.startsWith("sent ") ? t.substring(5) : t;
     }
 
-    static String text(McpSchema.CallToolResult result) {
+    public static String text(McpSchema.CallToolResult result) {
         if (result.content() == null) {
             return "";
         }

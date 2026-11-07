@@ -5,7 +5,6 @@ import {
   ChatMessage,
   ChatRequest,
   ChatResponse,
-  CompanyName,
   Health,
   KanbanCard,
   KanbanCardCreate,
@@ -16,6 +15,7 @@ import {
   PriceAlertCreate,
   TradeRequest,
   TradeResult,
+  TickerSearchResult,
   UserInfo,
   WatchlistAddRequest,
   WatchlistItem,
@@ -61,13 +61,11 @@ export class ApiClient {
   addToWatchlist(body: WatchlistAddRequest): Observable<WatchlistItem> {
     return this.http.post<WatchlistItem>('/api/watchlist', body);
   }
+  searchTickers(q: string): Observable<TickerSearchResult[]> {
+    return this.http.get<TickerSearchResult[]>('/api/tickers/search', { params: { q } });
+  }
   removeFromWatchlist(ticker: string): Observable<void> {
     return this.http.delete<void>(`/api/watchlist/${encodeURIComponent(ticker)}`);
-  }
-
-  // reference
-  getCompanyNames(tickers: string[]): Observable<CompanyName[]> {
-    return this.http.get<CompanyName[]>('/api/reference/names', { params: { tickers: tickers.join(',') } });
   }
 
   // chat

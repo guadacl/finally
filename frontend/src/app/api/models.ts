@@ -13,6 +13,8 @@ export interface ApiError {
 export interface PriceAlert {
   id: string;
   ticker: string;
+  /** Company name, e.g. "Apple Inc." (null while unknown). */
+  name?: string | null;
   upperLimit?: number | null;
   lowerLimit?: number | null;
   comment?: string | null;
@@ -86,6 +88,8 @@ export interface TradeResult {
 
 export interface Position {
   ticker: string;
+  /** Company name, e.g. "Apple Inc." (null while unknown). */
+  name?: string | null;
   quantity: number;
   avgCost: number;
   currentPrice: number;
@@ -112,13 +116,20 @@ export interface WatchlistAddRequest {
   ticker: string;
 }
 
-export interface CompanyName {
+/** `GET /api/tickers/search?q=` — a stock found by name or ticker (Massive / Polygon.io MCP server). */
+export interface TickerSearchResult {
   ticker: string;
-  name?: string | null;
+  name: string;
+  /** Primary exchange MIC, e.g. XNAS, XNYS. */
+  exchange?: string | null;
+  /** Security type, e.g. CS (common stock), ETF, ADRC. */
+  type?: string | null;
 }
 
 export interface WatchlistItem {
   ticker: string;
+  /** Company name, e.g. "Enphase Energy, Inc." (null while unknown). */
+  name?: string | null;
   price?: number | null;
   previousPrice?: number | null;
   sessionOpenPrice?: number | null;
@@ -188,6 +199,8 @@ export const COLUMN_LABEL: Readonly<Record<KanbanColumn, string>> = {
 export interface KanbanCard {
   id: string;
   ticker: string;
+  /** Company name, e.g. "Apple Inc." (null while unknown). */
+  name?: string | null;
   column: KanbanColumn;
   targetPrice: number;
   sortOrder: number;

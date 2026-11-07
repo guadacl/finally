@@ -12,6 +12,9 @@ public interface PriceAlertRepository extends JpaRepository<PriceAlertEntity, UU
 
     Optional<PriceAlertEntity> findByIdAndUserId(UUID id, String userId);
 
+    /** The user's alert for a ticker (at most one: unique user_id + ticker). */
+    Optional<PriceAlertEntity> findByUserIdAndTicker(String userId, String ticker);
+
     long countByTicker(String ticker);
 
     @Query("select new com.finallyapp.persistence.TickerFirstSeen(a.ticker, min(a.createdAt)) "

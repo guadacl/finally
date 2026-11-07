@@ -31,4 +31,11 @@ public interface KanbanWorkflow {
      * implementation cancel the instance if the message cannot be correlated.
      */
     void cardDeleted(KanbanCardRef card, Long processInstanceKey);
+
+    /**
+     * Silently cancels the process instance of a card that was removed by a data cleanup (a duplicate ticker in
+     * the same column), without the CARD_DELETED toast or email. Best effort; no-op without Camunda.
+     */
+    default void processDiscarded(long processInstanceKey) {
+    }
 }

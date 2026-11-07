@@ -10,8 +10,7 @@ import { TICKER_PATTERN, normalizeTicker } from '../../core/watchlist.service';
 import { PctPipe, PricePipe, VolumePipe } from '../../shared/format';
 import { PriceFlashDirective } from '../../shared/price-flash.directive';
 import { fmtRsi, rsiClass, rsiTitle } from '../../shared/rsi';
-import { CompanyNameService } from '../../core/company-name.service';
-import { TableSearchComponent, matchesSearch } from '../../shared/table-search.component';
+import { SearchBoxComponent, matchesSearch } from '../../shared/search-box.component';
 
 /**
  * One Support or Resistance table on the Alerts page: the cards of one kanban column shown with the same market
@@ -21,7 +20,7 @@ import { TableSearchComponent, matchesSearch } from '../../shared/table-search.c
 @Component({
   selector: 'app-target-table',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, DatePipe, PricePipe, PctPipe, VolumePipe, PriceFlashDirective, TableSearchComponent],
+  imports: [FormsModule, DatePipe, PricePipe, PctPipe, VolumePipe, PriceFlashDirective, SearchBoxComponent],
   host: { class: 'block' },
   template: `
     <section class="panel flex h-full flex-col overflow-hidden" [attr.data-testid]="'target-table-' + column()">
@@ -34,7 +33,8 @@ import { TableSearchComponent, matchesSearch } from '../../shared/table-search.c
           </span>
         </span>
         <div class="flex items-center gap-3 normal-case tracking-normal">
-          <span class="num">{{ allRows().length }} {{ allRows().length === 1 ? 'card' : 'cards' }} · notifies once · via Camunda</span>
+          <span class="num">{{ rows().length }} {{ rows().length === 1 ? 'card' : 'cards' }} · notifies once · via Camunda</span>
+          <app-search-box [(query)]="search" [testId]="'target-search-' + column()" />
           <button
             type="button"
             class="btn btn-submit flex h-7 w-7 items-center justify-center p-0 text-lg leading-none"
@@ -57,6 +57,11 @@ import { TableSearchComponent, matchesSearch } from '../../shared/table-search.c
             <input name="tTicker" class="field num uppercase" autocomplete="off" maxlength="10" placeholder="e.g. AAPL"
               [attr.data-testid]="'target-add-ticker-' + column()" [ngModel]="newTicker()" (ngModelChange)="newTicker.set($event); formError.set(null)" />
             <span class="num h-4 text-[11px] text-muted">@if (newLivePrice() != null) { now {{ newLivePrice() | price }} }</span>
+            @if (existingNewTicker(); as c) {
+              <span class="text-[11px] text-accent" [attr.data-testid]="'target-exists-hint-' + column()">
+                {{ c.ticker }} is already here: saving updates its target.
+              </span>
+            }
           </label>
           <label class="flex flex-col gap-1">
             <span class="text-[10px] tracking-widest text-muted uppercase">Target price</span>
@@ -78,11 +83,8 @@ import { TableSearchComponent, matchesSearch } from '../../shared/table-search.c
         </form>
       }
 
-      @if (allRows().length > 0) {
-        <app-table-search class="border-b border-edge p-2" [testId]="'target-search-' + column()" [(query)]="query" />
-      }
       <div class="min-h-0 flex-1 overflow-auto">
-        @if (allRows().length === 0) {
+        @if (rows().length === 0) {
           <div class="flex h-full min-h-24 flex-col items-center justify-center gap-1 p-6 text-center text-sm text-muted"
             [attr.data-testid]="'target-empty-' + column()">
             <span>No {{ label() }} targets yet.</span>
@@ -108,13 +110,12 @@ import { TableSearchComponent, matchesSearch } from '../../shared/table-search.c
               </tr>
             </thead>
             <tbody>
-              @for (c of rows(); track c.id) {
+              @for (c of visibleRows(); track c.id) {
                 <tr class="border-b border-edge/60 hover:bg-panel-2" [class.target-broken]="broken(c)"
                   [attr.data-testid]="'target-row-' + c.id" [attr.data-broken]="broken(c)" [attr.data-status]="statusOf(c)"
                   [attr.title]="broken(c) ? 'Price is above this resistance target' : null">
                   <td class="px-3 py-2 font-bold">{{ c.ticker }}</td>
-                  <td class="max-w-[14rem] truncate px-3 py-2 text-muted" [attr.title]="names.name(c.ticker)"
-                    [attr.data-testid]="'target-name-' + c.id">{{ names.name(c.ticker) ?? '' }}</td>
+                  <td class="max-w-56 truncate px-3 py-2 text-muted" [attr.title]="c.name ?? null" [attr.data-testid]="'target-name-' + c.id">{{ c.name || '—' }}</td>
                   <td class="num px-3 py-2 text-right"><span class="rounded px-1" [appPriceFlash]="livePrice(c)">{{ livePrice(c) | price }}</span></td>
                   <td class="num px-3 py-2 text-right text-muted">{{ dayRange(c).low | price }}</td>
                   <td class="num px-3 py-2 text-right text-muted">{{ dayRange(c).high | price }}</td>
@@ -151,7 +152,11 @@ import { TableSearchComponent, matchesSearch } from '../../shared/table-search.c
                   <tr><td colspan="13" class="px-3 pb-2 text-[11px] text-down" [attr.data-testid]="'target-error-' + c.id">{{ c.ticker }}: {{ e }}</td></tr>
                 }
               } @empty {
-                <tr><td colspan="13" class="py-6 text-center text-muted" [attr.data-testid]="'target-no-match-' + column()">No {{ label() }} target matches "{{ query() }}"</td></tr>
+                <tr>
+                  <td colspan="13" class="px-3 py-4 text-center text-muted" [attr.data-testid]="'target-no-match-' + column()">
+                    No {{ label() }} targets match "{{ search() }}".
+                  </td>
+                </tr>
               }
             </tbody>
           </table>
@@ -183,22 +188,22 @@ export class TargetTableComponent {
   readonly otherColumn = computed<KanbanColumn>(() => (this.isSupport() ? 'RESISTANCE' : 'SUPPORT'));
   readonly otherLabel = computed(() => COLUMN_LABEL[this.otherColumn()]);
 
-  readonly names = inject(CompanyNameService);
-  /** Full-text search on ticker and company name. */
-  readonly query = signal('');
-
   /** The column's cards, nearest target first; re-sorts as prices stream. */
-  readonly allRows = computed(() =>
+  readonly rows = computed(() =>
     sortByDistance(this.isSupport() ? this.kanban.support() : this.kanban.resistance(), (c) => this.livePrice(c)),
   );
-  /** The cards matching the search. */
-  readonly rows = computed(() =>
-    this.allRows().filter((c) => matchesSearch(this.query(), c.ticker, this.names.name(c.ticker))),
-  );
+  /** Search text for this table (ticker or company name). */
+  readonly search = signal('');
+  readonly visibleRows = computed(() => this.rows().filter((c) => matchesSearch(this.search(), c.ticker, c.name)));
 
   readonly formOpen = signal(false);
   readonly newTicker = signal('');
   readonly newPrice = signal('');
+  /** The column's card for the ticker being typed, if any (adding it again updates that card). */
+  readonly existingNewTicker = computed(() => {
+    const t = normalizeTicker(this.newTicker());
+    return t ? (this.rows().find((c) => c.ticker === t) ?? null) : null;
+  });
   readonly newComment = signal('');
   readonly busy = signal(false);
   readonly formError = signal<string | null>(null);

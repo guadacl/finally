@@ -1,13 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, output, signal } from '@angular/core';
-import { FormsModule } from '@angular/forms';
 import { WatchlistItem, errorMessage } from '../api/models';
 import { PriceStreamService } from '../core/price-stream.service';
-import { TICKER_PATTERN, WatchlistService, changePercent, normalizeTicker } from '../core/watchlist.service';
+import { WatchlistService, changePercent } from '../core/watchlist.service';
 import { PctPipe, PricePipe, signClass } from './format';
 import { PriceFlashDirective } from './price-flash.directive';
+import { SearchBoxComponent, matchesSearch } from './search-box.component';
+import { StockSearchAddComponent } from './stock-search-add.component';
 import { SparklineComponent } from './sparkline.component';
-import { CompanyNameService } from '../core/company-name.service';
-import { TableSearchComponent, matchesSearch } from './table-search.component';
 
 /** One watchlist row; reads its ticker's live price signal. */
 @Component({
@@ -24,7 +23,11 @@ import { TableSearchComponent, matchesSearch } from './table-search.component';
       <span class="block h-5 w-0.5 rounded" [class.bg-accent]="selected()"></span>
     </td>
     <td class="font-semibold tracking-wide">{{ item().ticker }}</td>
-    <td class="max-w-[11rem] truncate text-muted" [attr.title]="name()" data-testid="watchlist-name">{{ name() ?? '' }}</td>
+    @if (showName()) {
+      <td class="max-w-64 truncate text-muted" [attr.title]="item().name ?? null" [attr.data-testid]="'watchlist-name-' + item().ticker">
+        {{ item().name || '—' }}
+      </td>
+    }
     <td class="num text-right">
       <span class="rounded px-1" [appPriceFlash]="price()" data-testid="watchlist-price">{{ price() | price }}</span>
     </td>
@@ -48,16 +51,15 @@ import { TableSearchComponent, matchesSearch } from './table-search.component';
 export class WatchlistRowComponent {
   private readonly prices = inject(PriceStreamService);
   private readonly watchlist = inject(WatchlistService);
-  private readonly names = inject(CompanyNameService);
 
   readonly item = input.required<WatchlistItem>();
   readonly selected = input(false);
   readonly selectable = input(false);
   readonly removable = input(false);
+  readonly showName = input(false);
   readonly pick = output<string>();
   readonly remove = output<string>();
 
-  readonly name = computed(() => this.names.name(this.item().ticker));
   private readonly state = computed(() => this.prices.state(this.item().ticker)());
   readonly price = computed(() => this.state()?.price ?? this.item().price ?? null);
   readonly history = computed(() => this.state()?.history ?? []);
@@ -79,37 +81,53 @@ export class WatchlistRowComponent {
 @Component({
   selector: 'app-watchlist-table',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, WatchlistRowComponent, TableSearchComponent],
+  imports: [WatchlistRowComponent, SearchBoxComponent, StockSearchAddComponent],
   host: { class: 'flex min-h-0 flex-col' },
   template: `
     @if (showAdd()) {
-      <form class="flex gap-2 border-b border-edge p-2" (ngSubmit)="add()">
-        <input
-          name="watchTicker"
-          data-testid="watchlist-add-input"
-          class="field num w-28 min-w-0 flex-1 uppercase"
-          placeholder="Add ticker"
-          autocomplete="off"
-          maxlength="10"
-          [ngModel]="draft()"
-          (ngModelChange)="draft.set($event); error.set(null)"
-        />
-        <button type="submit" data-testid="watchlist-add-button" class="btn btn-submit" [disabled]="busy() || !draft().trim()">
-          Add
-        </button>
-      </form>
-      @if (error(); as e) {
-        <div data-testid="watchlist-error" class="border-b border-edge bg-down/10 px-2 py-1 text-xs text-down">{{ e }}</div>
-      }
+      <app-stock-search-add class="border-b border-edge" />
     }
-    <app-table-search class="border-b border-edge p-2" testId="watchlist-search" [(query)]="query" />
+    @if (error(); as e) {
+      <div data-testid="watchlist-remove-error" class="border-b border-edge bg-down/10 px-2 py-1 text-xs text-down">{{ e }}</div>
+    }
+    <div class="relative flex min-h-0 flex-1 flex-col">
+    <!-- Filter (frontend only): funnel icon in the table's top-right corner, opens a small field -->
+    <button
+      type="button"
+      data-testid="watchlist-filter-toggle"
+      class="absolute top-0.5 right-1 z-20 flex h-5 w-5 cursor-pointer items-center justify-center rounded hover:bg-edge"
+      [class.text-accent]="!!filter().trim()"
+      [class.text-muted]="!filter().trim()"
+      [attr.title]="filter().trim() ? 'Filter: ' + filter() : 'Filter the list'"
+      [attr.aria-label]="'Filter the list'"
+      [attr.aria-expanded]="filterOpen()"
+      (click)="toggleFilter()"
+    >
+      <svg viewBox="0 0 16 16" class="h-3.5 w-3.5" fill="currentColor" aria-hidden="true">
+        <path d="M1.5 2h13a.5.5 0 0 1 .39.81L10 9v4.5a.5.5 0 0 1-.28.45l-3 1.5A.5.5 0 0 1 6 15V9L1.11 2.81A.5.5 0 0 1 1.5 2z" />
+      </svg>
+    </button>
+    @if (filterOpen()) {
+      <div class="absolute top-6 right-1 z-30 w-56 rounded border border-edge bg-panel-2 p-1.5 shadow-lg" data-testid="watchlist-filter-panel">
+        <app-search-box
+          [(query)]="filter"
+          [fullWidth]="true"
+          [autofocus]="true"
+          placeholder="Filter by ticker or name"
+          testId="watchlist-filter"
+          (escaped)="closeFilter()"
+        />
+      </div>
+    }
     <div class="min-h-0 flex-1 overflow-auto">
       <table class="grid-table">
         <thead>
           <tr>
             <th></th>
             <th>Ticker</th>
-            <th>Name</th>
+            @if (showName()) {
+              <th>Name</th>
+            }
             <th class="!text-right">Price</th>
             <th class="!text-right">Chg %</th>
             <th>Trend</th>
@@ -119,25 +137,31 @@ export class WatchlistRowComponent {
           </tr>
         </thead>
         <tbody>
-          @for (item of rows(); track item.ticker) {
+          @for (item of visibleItems(); track item.ticker) {
             <tr
               app-watchlist-row
               [item]="item"
               [selected]="item.ticker === selected()"
               [selectable]="selectable()"
               [removable]="removable()"
+              [showName]="showName()"
               (pick)="pick.emit($event)"
               (remove)="removeTicker($event)"
             ></tr>
           } @empty {
             <tr>
-              <td colspan="7" class="py-6 text-center text-muted" data-testid="watchlist-empty">
-                {{ !watchlist.loaded() ? 'Loading…' : watchlist.items().length ? 'No stock matches "' + query() + '"' : 'Watchlist is empty' }}
+              <td colspan="7" class="py-6 text-center text-muted">
+                @if (filter().trim() && watchlist.items().length > 0) {
+                  <span data-testid="watchlist-no-match">No tickers match "{{ filter() }}"</span>
+                } @else {
+                  {{ watchlist.loaded() ? 'Watchlist is empty' : 'Loading…' }}
+                }
               </td>
             </tr>
           }
         </tbody>
       </table>
+    </div>
     </div>
   `,
 })
@@ -148,39 +172,26 @@ export class WatchlistTableComponent {
   readonly selectable = input(false);
   readonly removable = input(true);
   readonly showAdd = input(true);
+  /** Company name column (Watchlists page; the narrow Markets panel leaves it off). */
+  readonly showName = input(false);
   readonly pick = output<string>();
 
-  private readonly names = inject(CompanyNameService);
-  /** Full-text search on ticker and company name. */
-  readonly query = signal('');
-  readonly rows = computed(() =>
-    this.watchlist.items().filter((i) => matchesSearch(this.query(), i.ticker, this.names.name(i.ticker))),
-  );
+  /** Frontend-only filter of the rows (ticker or company name), opened from the funnel icon. */
+  readonly filter = signal('');
+  readonly filterOpen = signal(false);
+  readonly visibleItems = computed(() => this.watchlist.items().filter((i) => matchesSearch(this.filter(), i.ticker, i.name)));
 
-  readonly draft = signal('');
-  readonly error = signal<string | null>(null);
-  readonly busy = signal(false);
-
-  add(): void {
-    const ticker = normalizeTicker(this.draft());
-    if (!ticker) return;
-    if (!TICKER_PATTERN.test(ticker)) {
-      this.error.set(`"${ticker}" is not a valid ticker`);
-      return;
-    }
-    this.busy.set(true);
-    this.watchlist.add(ticker).subscribe({
-      next: () => {
-        this.busy.set(false);
-        this.draft.set('');
-        this.error.set(null);
-      },
-      error: (err) => {
-        this.busy.set(false);
-        this.error.set(errorMessage(err, `Could not add ${ticker}`));
-      },
-    });
+  toggleFilter(): void {
+    this.filterOpen.update((open) => !open);
   }
+
+  /** Esc in the field: clear the filter and close it. */
+  closeFilter(): void {
+    this.filter.set('');
+    this.filterOpen.set(false);
+  }
+
+  readonly error = signal<string | null>(null);
 
   removeTicker(ticker: string): void {
     this.watchlist.remove(ticker).subscribe({

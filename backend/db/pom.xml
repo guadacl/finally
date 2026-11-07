@@ -9,7 +9,7 @@
     <version>1.0.0-SNAPSHOT</version>
   </parent>
   <artifactId>finally-db</artifactId>
-  <name>FinAlly database migrations</name>
+  <name>Tradex database migrations</name>
   <description>Flyway migrations (classpath:db/migration). Owned by the DB agent.</description>
 
   <!-- Ships only SQL resources; all dependencies below are test-scope. -->

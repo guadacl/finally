@@ -71,7 +71,10 @@ export class AlertsService {
   }
 
   create(body: PriceAlertCreate): Observable<PriceAlert> {
-    return this.api.createPriceAlert(body).pipe(tap((a) => this.alerts.update((list) => [...list, a])));
+    // one alert per ticker: the server returns the existing alert (updated) when the ticker already had one
+    return this.api.createPriceAlert(body).pipe(
+      tap((a) => this.alerts.update((list) => (list.some((x) => x.id === a.id) ? list.map((x) => (x.id === a.id ? a : x)) : [...list, a]))),
+    );
   }
 
   remove(id: string): Observable<void> {

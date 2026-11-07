@@ -11,9 +11,8 @@ import { WatchlistService } from '../../core/watchlist.service';
 import { PricePipe, VolumePipe } from '../../shared/format';
 import { PriceFlashDirective } from '../../shared/price-flash.directive';
 import { rsiClass, rsiTitle } from '../../shared/rsi';
+import { SearchBoxComponent, matchesSearch } from '../../shared/search-box.component';
 import { TargetTableComponent } from './target-table.component';
-import { CompanyNameService } from '../../core/company-name.service';
-import { TableSearchComponent, matchesSearch } from '../../shared/table-search.component';
 
 /** How often the list is reloaded for fresh day high/low, volume and RSI. */
 export const REFRESH_MS = 30_000;
@@ -30,7 +29,7 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
 @Component({
   selector: 'app-alerts-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, RouterLink, DatePipe, PricePipe, VolumePipe, PriceFlashDirective, TargetTableComponent, TableSearchComponent],
+  imports: [FormsModule, RouterLink, DatePipe, PricePipe, VolumePipe, PriceFlashDirective, TargetTableComponent, SearchBoxComponent],
   host: { class: 'block h-full' },
   template: `
     <div class="mx-auto flex h-full max-w-[1500px] flex-col gap-2 overflow-auto">
@@ -39,6 +38,7 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
         <span>Price alerts</span>
         <div class="flex items-center gap-3 normal-case tracking-normal">
           <span class="num">{{ alerts.alerts().length }} alerts · prices stream live</span>
+          <app-search-box [(query)]="search" testId="alerts-search" />
           <button
             type="button"
             data-testid="alerts-add-button"
@@ -54,7 +54,7 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
       </div>
 
       @if (formOpen()) {
-        <form class="grid gap-3 border-b border-edge bg-panel-2 p-3 md:grid-cols-[12rem_9rem_9rem_1fr_auto]" (ngSubmit)="save()" data-testid="alerts-form">
+        <form class="grid gap-3 border-b border-edge bg-panel-2 p-3 md:grid-cols-[18rem_9rem_9rem_1fr_auto]" (ngSubmit)="save()" data-testid="alerts-form">
           @if (watchlistTickers().length === 0) {
             <p class="text-sm text-muted md:col-span-5">
               Your watchlist is empty. <a routerLink="/watchlists" class="text-primary underline">Add stocks to your watchlist</a> first.
@@ -64,13 +64,16 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
               <span class="text-[10px] tracking-widest text-muted uppercase">Stock (from watchlist)</span>
               <select name="aTicker" data-testid="alerts-ticker" class="field" [ngModel]="ticker()" (ngModelChange)="ticker.set($event); error.set(null)">
                 <option value="" disabled>Choose a stock…</option>
-                @for (t of watchlistTickers(); track t) {
-                  <option [value]="t">{{ t }}{{ names.name(t) ? ' — ' + names.name(t) : '' }}</option>
+                @for (s of watchlistStocks(); track s.ticker) {
+                  <option [value]="s.ticker" [attr.title]="s.name ?? null">{{ s.name ? s.ticker + ' — ' + s.name : s.ticker }}</option>
                 }
               </select>
               <span class="num h-4 text-[11px] text-muted">
                 @if (selectedPrice() != null) { now {{ selectedPrice() | price }} }
               </span>
+              @if (ticker() && hasAlert(ticker())) {
+                <span class="text-[11px] text-accent" data-testid="alerts-exists-hint">{{ ticker() }} already has an alert: saving replaces its limits.</span>
+              }
             </label>
             <label class="flex flex-col gap-1">
               <span class="text-[10px] tracking-widest text-muted uppercase">Upper limit</span>
@@ -98,9 +101,6 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
         </form>
       }
 
-      @if (alerts.alerts().length > 0) {
-        <app-table-search class="border-b border-edge p-2" testId="alerts-search" [(query)]="query" />
-      }
       <div class="min-h-0 flex-1 overflow-auto">
         @if (alerts.alerts().length === 0) {
           <div class="flex h-full flex-col items-center justify-center gap-2 p-8 text-center text-sm text-muted" data-testid="alerts-empty">
@@ -126,11 +126,10 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
               </tr>
             </thead>
             <tbody>
-              @for (a of rows(); track a.id) {
+              @for (a of visibleAlerts(); track a.id) {
                 <tr class="border-b border-edge/60 hover:bg-panel-2" [attr.data-testid]="'alerts-row-' + a.id" [attr.data-status]="status(a)">
                   <td class="px-3 py-2 font-bold">{{ a.ticker }}</td>
-                  <td class="max-w-[14rem] truncate px-3 py-2 text-muted" [attr.title]="names.name(a.ticker)"
-                    [attr.data-testid]="'alerts-name-' + a.id">{{ names.name(a.ticker) ?? '' }}</td>
+                  <td class="max-w-56 truncate px-3 py-2 text-muted" [attr.title]="a.name ?? null" [attr.data-testid]="'alerts-name-' + a.id">{{ a.name || '—' }}</td>
                   <td class="num px-3 py-2 text-right"><span class="rounded px-1" [appPriceFlash]="livePrice(a)">{{ livePrice(a) | price }}</span></td>
                   <td class="num px-3 py-2 text-right text-muted" [attr.data-testid]="'alerts-daylow-' + a.id">{{ dayRange(a).low | price }}</td>
                   <td class="num px-3 py-2 text-right text-muted" [attr.data-testid]="'alerts-dayhigh-' + a.id">{{ dayRange(a).high | price }}</td>
@@ -149,7 +148,9 @@ const STATUS: Record<AlertStatus, { label: string; cls: string }> = {
                   </td>
                 </tr>
               } @empty {
-                <tr><td colspan="12" class="py-6 text-center text-muted" data-testid="alerts-no-match">No alert matches "{{ query() }}"</td></tr>
+                <tr>
+                  <td colspan="13" class="px-3 py-4 text-center text-muted" data-testid="alerts-no-match">No alerts match "{{ search() }}".</td>
+                </tr>
               }
             </tbody>
           </table>
@@ -173,14 +174,6 @@ export class AlertsPage implements OnInit {
   private readonly kanban = inject(KanbanService);
   private readonly toasts = inject(ToastService);
 
-  readonly names = inject(CompanyNameService);
-
-  /** Full-text search on ticker and company name. */
-  readonly query = signal('');
-  readonly rows = computed(() =>
-    this.alerts.alerts().filter((a) => matchesSearch(this.query(), a.ticker, this.names.name(a.ticker))),
-  );
-
   readonly maxComment = MAX_ALERT_COMMENT;
   readonly formOpen = signal(false);
   readonly ticker = signal('');
@@ -191,6 +184,15 @@ export class AlertsPage implements OnInit {
   readonly error = signal<string | null>(null);
 
   readonly watchlistTickers = computed(() => this.watchlist.items().map((i) => i.ticker));
+  /** Dropdown options: ticker plus company name when known ("ENPH — Enphase Energy, Inc."). */
+  readonly watchlistStocks = computed(() => this.watchlist.items().map((i) => ({ ticker: i.ticker, name: i.name ?? null })));
+  hasAlert(ticker: string): boolean {
+    return this.alerts.alerts().some((a) => a.ticker === ticker);
+  }
+
+  /** Search text for the price alerts table (ticker or company name). */
+  readonly search = signal('');
+  readonly visibleAlerts = computed(() => this.alerts.alerts().filter((a) => matchesSearch(this.search(), a.ticker, a.name)));
   readonly selectedPrice = computed(() => (this.ticker() ? this.prices.price(this.ticker()) : null));
 
   ngOnInit(): void {

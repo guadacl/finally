@@ -19,6 +19,9 @@ public interface KanbanCardRepository extends JpaRepository<KanbanCardEntity, UU
 
     Optional<KanbanCardEntity> findByIdAndUserId(UUID id, String userId);
 
+    /** The user's card for a ticker in a column (at most one: unique user_id + ticker + column_name). */
+    Optional<KanbanCardEntity> findByUserIdAndTickerAndColumn(String userId, String ticker, String column);
+
     @Query("select coalesce(max(c.sortOrder) + 1, 0) from KanbanCardEntity c where c.userId = :userId and c.column = :column")
     int nextSortOrder(@Param("userId") String userId, @Param("column") String column);
 

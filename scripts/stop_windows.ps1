@@ -1,5 +1,5 @@
 <#
-  Stop FinAlly. Containers are removed; volumes (database, Camunda data) are kept. Idempotent.
+  Stop Tradex. Containers are removed; volumes (database, Camunda data) are kept. Idempotent.
 #>
 $ErrorActionPreference = 'Stop'
 
@@ -16,4 +16,4 @@ if ($LASTEXITCODE -ne 0) {
     Write-Error 'docker compose down failed.'
     exit 1
 }
-Write-Host 'FinAlly stopped. Data volumes are preserved.'
+Write-Host 'Tradex stopped. Data volumes are preserved.'

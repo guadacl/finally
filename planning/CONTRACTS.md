@@ -1,4 +1,4 @@
-# FinAlly — Build Contracts
+# Tradex — Build Contracts
 
 This file is the **binding contract** between the four build agents (DB, Camunda, Backend, Frontend).
 Where `PLAN.md` still mentions Python, FastAPI, uv, LiteLLM, Next.js, SQLite or pytest, **this file wins**.
@@ -128,10 +128,6 @@ price_alerts(                                     -- V3: Alerts page
 API: GET /api/alerts, POST /api/alerts {ticker, upperLimit?, lowerLimit?, comment?}, DELETE /api/alerts/{id}
 ```
 
-Company names and table search (all tables: watchlist, positions, price alerts, Support, Resistance):
-- `GET /api/reference/names?tickers=AAPL,MSFT` → `[{ticker, name|null}]` (`CompanyNameController` / `CompanyNames`). Built-in names for the default watchlist and common US stocks; other tickers are looked up once via Finnhub `/stock/profile2` (if `FINNHUB_API_KEY`) else Massive `/v3/reference/tickers/{t}` (if `MASSIVE_API_KEY`), cached in memory (unknown: 24 h, failures: retried after 5 min), at most 10 provider lookups per call.
-- UI: a **Name** column right after **Ticker**, and a search box above each table that filters rows client-side: every word of the query must appear in the ticker or the company name (case- and accent-insensitive, partial words). Names come from the shared `CompanyNameService` (one batched request per tick).
-
 Alerts page behaviour:
 - Each row also shows `rsi`: RSI(14), Wilder smoothing, on daily closes from Massive end-of-day aggregates (`DailyCloses`, ~150 calendar days, one ticker per 20 s, cached per day), with the live price as today's close during the session. `null` without `MASSIVE_API_KEY` or until the history has loaded. UI: ≥ 70 overbought, ≤ 30 oversold.
 - Adding an alert also creates kanban cards: `lowerLimit` → a SUPPORT card, `upperLimit` → a RESISTANCE card (frontend, via `POST /api/kanban`; deleting the alert leaves the cards). The alert form's comment is copied onto those cards.
@@ -158,7 +154,7 @@ Persistence mapping (`backend/app/src/main/java/com/finallyapp/persistence`): on
   - *Deletion*: `KanbanService.delete` reads the card first and calls `KanbanWorkflow.cardDeleted(card, processInstanceKey)`; the `card-deleted` message carries `ticker`, `column`, `targetPrice`, `userId`. Instances of an older process version (created before deletion emails existed) end without emailing; after a successful correlation the workflow checks the instance's process definition (cached) and, for such versions, sends the deletion toast + email directly. If the message cannot be correlated, the fallback sends them and the instance is cancelled by its key.
   - *Fallback path* (Camunda down / correlation failed): `DirectKanbanWorkflow` publishes the toast and calls `NotificationEmailer` for created / deleted / target hit. So each event is emailed exactly once on either path; Camunda job re-deliveries keep the notification id (derived from the job key) and are de-duplicated.
   - `NotificationMailer` (app, implements `NotificationEmailer`): asynchronous (one background thread, bounded queue), never throws; skipped when `MAIL_ENABLED=false`, `EMAIL_MCP_URL` is empty, there is no owner, or the owner has no email. It calls `McpEmailGateway`, an MCP client (Java MCP SDK 2.1.0, `mcp-core` + `mcp-json-jackson2`, Streamable HTTP transport) for the tool **`send_email {to, subject, text, html?}`** of the email MCP server (`mcp/email-mcp-server`, Node + `@modelcontextprotocol/sdk` + nodemailer, provider-agnostic SMTP). Each call is bounded by `EMAIL_MCP_TIMEOUT` (10 s).
-  - Subjects: `FinAlly: new Support card AAPL @ 185.00`, `FinAlly: Support card AAPL @ 185.00 deleted`, `FinAlly alert: AAPL hit Support 185.00`. Plain-text body with ticker, Support/Resistance (and its rule), target, current price (target hit), time (UTC) and a link to `${APP_PUBLIC_URL}/alerts`.
+  - Subjects: `Tradex: new Support card AAPL @ 185.00`, `Tradex: Support card AAPL @ 185.00 deleted`, `Tradex alert: AAPL hit Support 185.00`. Plain-text body with ticker, Support/Resistance (and its rule), target, current price (target hit), time (UTC) and a link to `${APP_PUBLIC_URL}/alerts`.
   - Address: copied from the OIDC `email` claim into `users_profile.email` by `UserEmailSyncFilter` on the user's requests (written only when it changes); it is not fetched from the Keycloak admin API.
 
 ## 6. Camunda contract (Camunda agent implements)
@@ -230,7 +226,7 @@ Already written by the orchestrator — read them, don't edit:
 | `APP_PUBLIC_URL` | app | `http://localhost:8000` (link in alert emails; compose: `http://localhost:${APP_PORT}`) |
 | `MAIL_HOST` / `MAIL_PORT` | email-mcp | `localhost` / `1025`; compose `mailpit` / `1025` |
 | `MAIL_USERNAME` / `MAIL_PASSWORD` / `MAIL_STARTTLS` / `MAIL_SECURE` | email-mcp | empty / empty / `false` / `true` on port 465 |
-| `MAIL_FROM` | email-mcp | `FinAlly <alerts@finally.local>` |
+| `MAIL_FROM` | email-mcp | `Tradex <alerts@finally.local>` |
 | `MCP_PORT` / `MCP_PATH` | email-mcp | `3001` / `/mcp` |
 | `MAILPIT_WEB_HOST_PORT` / `MAILPIT_SMTP_HOST_PORT` | mailpit | `8025` / `1025` |
 

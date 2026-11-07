@@ -10,7 +10,7 @@
     },
     "annotations": {
       "inputType": "html5-tel",
-      "inputHelperTextBefore": "Optional. FinAlly sends kanban alerts as SMS to this number."
+      "inputHelperTextBefore": "Optional. Tradex sends kanban alerts as SMS to this number."
     },
     "permissions": {
       "view": [

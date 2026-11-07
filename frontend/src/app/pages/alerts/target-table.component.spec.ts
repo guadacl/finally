@@ -40,16 +40,13 @@ describe('TargetTableComponent', () => {
       prices.apply({ ticker, price, previousPrice: price, timestamp: '2026-11-04T10:00:00Z', direction: 'up' });
     }
     TestBed.inject(KanbanService).cards.set([
-      card('s1', 'SUPPORT', 'AAPL', 150, { rsi: 74.25, dayLow: 195, dayHigh: 205, lastSessionVolume: 64_000_000 }), // -25%
+      card('s1', 'SUPPORT', 'AAPL', 150, { name: 'Apple Inc.', rsi: 74.25, dayLow: 195, dayHigh: 205, lastSessionVolume: 64_000_000 }), // -25%
       card('s2', 'SUPPORT', 'MSFT', 490, { armed: false, status: 'NOTIFIED', comment: 'earnings' }), // -2%
       card('r1', 'RESISTANCE', 'NVDA', 90, { comment: null }), // below price -> broken
     ]);
   });
 
-  afterEach(() => {
-    http.match((r) => r.url === '/api/reference/names').forEach((r) => r.flush([]));
-    http.verify();
-  });
+  afterEach(() => http.verify());
 
   function render(column: KanbanCard['column']) {
     const fixture = TestBed.createComponent(TargetTableComponent);
@@ -78,32 +75,23 @@ describe('TargetTableComponent', () => {
     expect(q('target-status-s1')!.textContent!.trim()).toBe('Active');
     expect(q('target-status-s2')!.textContent!.trim()).toBe('Notified');
     expect((q('target-comment-s2') as HTMLInputElement).value).toBe('earnings');
+    expect(q('target-name-s1')!.textContent!.trim()).toBe('Apple Inc.');
+    expect(q('target-name-s2')!.textContent!.trim()).toBe('—'); // name not known yet
   });
 
-  it('shows the company name after the ticker and searches on ticker and name', async () => {
+  it('filters cards by ticker or company name from the search box', async () => {
     const { fixture, root, q } = render('SUPPORT');
-    await new Promise((r) => setTimeout(r, 0)); // the name lookups are batched on the next tick
-    const req = http.expectOne((r) => r.url === '/api/reference/names');
-    expect(req.request.params.get('tickers')!.split(',').sort()).toEqual(['AAPL', 'MSFT']);
-    req.flush([{ ticker: 'AAPL', name: 'Apple Inc.' }, { ticker: 'MSFT', name: 'Microsoft Corporation' }]);
-    await fixture.whenStable();
-    expect(q('target-name-s1')!.textContent!.trim()).toBe('Apple Inc.');
-
-    const rowIds = () => Array.from(root.querySelectorAll('tbody tr[data-testid^="target-row-"]')).map((r) => r.getAttribute('data-testid'));
+    const rows = () => Array.from(root.querySelectorAll('tbody tr[data-testid^="target-row-"]')).map((r) => r.getAttribute('data-testid'));
     const search = q('target-search-SUPPORT') as HTMLInputElement;
-    const type = async (v: string) => {
-      search.value = v;
-      search.dispatchEvent(new Event('input'));
-      await fixture.whenStable();
-    };
-    await type('micro');
-    expect(rowIds()).toEqual(['target-row-s2']);
-    await type('aap');
-    expect(rowIds()).toEqual(['target-row-s1']);
-    await type('tesla');
-    expect(rowIds()).toEqual([]);
-    expect(q('target-no-match-SUPPORT')!.textContent).toContain('tesla');
-    expect(root.textContent).toContain('2 cards'); // the header keeps the total
+    search.value = 'apple';
+    search.dispatchEvent(new Event('input'));
+    await fixture.whenStable();
+    expect(rows()).toEqual(['target-row-s1']);
+    search.value = 'xyz';
+    search.dispatchEvent(new Event('input'));
+    await fixture.whenStable();
+    expect(rows()).toEqual([]);
+    expect(q('target-no-match-SUPPORT')!.textContent).toContain('xyz');
   });
 
   it('highlights a Resistance target below the current price', () => {
@@ -156,5 +144,20 @@ describe('TargetTableComponent', () => {
     const post = http.expectOne({ method: 'POST', url: '/api/kanban' });
     expect(post.request.body).toEqual({ ticker: 'MSFT', column: 'RESISTANCE', targetPrice: 600, comment: 'breakout' });
     post.flush(card('r2', 'RESISTANCE', 'MSFT', 600, { comment: 'breakout' }));
+  });
+
+  it('warns that adding a ticker already in the table updates its card', async () => {
+    const { fixture, q } = render('SUPPORT');
+    q('target-add-button-SUPPORT')!.click();
+    await fixture.whenStable();
+    const ticker = q('target-add-ticker-SUPPORT') as HTMLInputElement;
+    ticker.value = 'nvda'; // only in Resistance
+    ticker.dispatchEvent(new Event('input'));
+    await fixture.whenStable();
+    expect(q('target-exists-hint-SUPPORT')).toBeNull();
+    ticker.value = 'aapl';
+    ticker.dispatchEvent(new Event('input'));
+    await fixture.whenStable();
+    expect(q('target-exists-hint-SUPPORT')!.textContent).toContain('AAPL is already here');
   });
 });

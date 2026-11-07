@@ -1,4 +1,4 @@
-# FinAlly Project - the Finance Ally
+# Tradex Project - AI Trading Workstation
 
 All project documentation is in the `planning` directory.
 

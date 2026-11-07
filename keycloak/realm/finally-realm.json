@@ -1,7 +1,7 @@
 {
   "realm": "finally",
-  "displayName": "FinAlly",
-  "displayNameHtml": "<span style=\"font-weight:700\">Fin<span style=\"color:#ecad0a\">Ally</span></span>",
+  "displayName": "Tradex",
+  "displayNameHtml": "<span style=\"font-weight:700\">Trade<span style=\"color:#ecad0a\">x</span></span>",
   "enabled": true,
   "loginTheme": "finally",
   "sslRequired": "external",
@@ -62,8 +62,8 @@
   "clients": [
     {
       "clientId": "finally-app",
-      "name": "FinAlly",
-      "description": "FinAlly trading workstation (Spring Boot backend-for-frontend)",
+      "name": "Tradex",
+      "description": "Tradex trading workstation (Spring Boot backend-for-frontend)",
       "enabled": true,
       "protocol": "openid-connect",
       "publicClient": false,
@@ -123,7 +123,7 @@
         "subComponents": {},
         "config": {
           "kc.user.profile.config": [
-            "{\"attributes\":[{\"name\":\"username\",\"displayName\":\"Username\",\"validations\":{\"length\":{\"min\":3,\"max\":255},\"username-prohibited-characters\":{},\"up-username-not-idn-homograph\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"email\",\"displayName\":\"Email\",\"validations\":{\"email\":{},\"length\":{\"max\":255}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"firstName\",\"displayName\":\"First name\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"lastName\",\"displayName\":\"Last name\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"phone_number\",\"displayName\":\"Mobile phone (international format, e.g. +32470123456)\",\"validations\":{\"pattern\":{\"pattern\":\"^\\\\+[1-9][0-9]{6,14}$\",\"error-message\":\"Use international format, e.g. +32470123456\"}},\"annotations\":{\"inputType\":\"html5-tel\",\"inputHelperTextBefore\":\"Optional. FinAlly sends kanban alerts as SMS to this number.\"},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false}],\"groups\":[{\"name\":\"user-metadata\",\"displayHeader\":\"User metadata\",\"displayDescription\":\"Attributes, which refer to user metadata\"}]}"
+            "{\"attributes\":[{\"name\":\"username\",\"displayName\":\"Username\",\"validations\":{\"length\":{\"min\":3,\"max\":255},\"username-prohibited-characters\":{},\"up-username-not-idn-homograph\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"email\",\"displayName\":\"Email\",\"validations\":{\"email\":{},\"length\":{\"max\":255}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"firstName\",\"displayName\":\"First name\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"lastName\",\"displayName\":\"Last name\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"phone_number\",\"displayName\":\"Mobile phone (international format, e.g. +32470123456)\",\"validations\":{\"pattern\":{\"pattern\":\"^\\\\+[1-9][0-9]{6,14}$\",\"error-message\":\"Use international format, e.g. +32470123456\"}},\"annotations\":{\"inputType\":\"html5-tel\",\"inputHelperTextBefore\":\"Optional. Tradex sends kanban alerts as SMS to this number.\"},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false}],\"groups\":[{\"name\":\"user-metadata\",\"displayHeader\":\"User metadata\",\"displayDescription\":\"Attributes, which refer to user metadata\"}]}"
           ]
         }
       }

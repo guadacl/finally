@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
-  title: FinAlly API
+  title: Tradex API
   version: 1.0.0
   description: |
-    API contract for FinAlly, the AI trading workstation. Spec-first: the backend generates
+    API contract for Tradex, the AI trading workstation. Spec-first: the backend generates
     Spring interfaces from this file and the frontend client must match it.
     All money/price/quantity values are JSON numbers. Timestamps are ISO-8601 (UTC).
 servers:
@@ -17,7 +17,6 @@ tags:
   - name: chat
   - name: kanban
   - name: alerts
-  - name: reference
 paths:
   /api/health:
     get:
@@ -77,29 +76,6 @@ paths:
           content:
             text/event-stream:
               schema: { $ref: '#/components/schemas/Notification' }
-
-  /api/reference/names:
-    get:
-      tags: [reference]
-      operationId: getCompanyNames
-      description: |
-        Company names for the given tickers (shown after the ticker in every table and used by the table search).
-        Names come from a built-in list of common US stocks and, when FINNHUB_API_KEY or MASSIVE_API_KEY is set,
-        from the provider's company profile (cached). Unknown tickers come back with a null name.
-      parameters:
-        - name: tickers
-          in: query
-          required: true
-          description: Comma-separated tickers (at most 100; invalid symbols are skipped)
-          schema: { type: string }
-      responses:
-        '200':
-          description: One entry per valid requested ticker
-          content:
-            application/json:
-              schema:
-                type: array
-                items: { $ref: '#/components/schemas/CompanyName' }
 
   /api/portfolio:
     get:
@@ -183,6 +159,34 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
 
+  /api/tickers/search:
+    get:
+      tags: [watchlist]
+      operationId: searchTickers
+      description: |
+        Full-text search for US stocks by company name or ticker, used to add a stock to the watchlist.
+        Answered by the Massive (formerly Polygon.io) MCP server (tool `call_api` on `/v3/reference/tickers`).
+        Best match first: exact ticker, then tickers starting with the query, then names. At most 20 results.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema: { type: string, maxLength: 50 }
+          description: Part of a company name or ticker, e.g. "enphase" or "ENPH"
+      responses:
+        '200':
+          description: Matching stocks (empty when nothing matches or the query is blank)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/TickerSearchResult' }
+        '503':
+          description: The search service is unavailable (no Massive key, MCP server down or rate-limited); add by ticker instead
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
   /api/watchlist/{ticker}:
     delete:
       tags: [watchlist]
@@ -250,7 +254,10 @@ paths:
     post:
       tags: [alerts]
       operationId: createPriceAlert
-      description: Adds an alert for a ticker that is on the user's watchlist. At least one limit is required.
+      description: |
+        Adds an alert for a ticker that is on the user's watchlist. At least one limit is required.
+        One alert per ticker: when the ticker already has an alert, its limits are replaced by the new ones
+        (and its comment, when one is given) and the existing alert is returned with 200.
       requestBody:
         required: true
         content:
@@ -259,6 +266,11 @@ paths:
       responses:
         '201':
           description: Alert created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PriceAlert' }
+        '200':
+          description: The ticker already had an alert; it was updated
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PriceAlert' }
@@ -301,6 +313,10 @@ paths:
     post:
       tags: [kanban]
       operationId: createKanbanCard
+      description: |
+        Adds a Support or Resistance card. One card per ticker per column: when the column already has a card
+        for the ticker, that card gets the new target price (re-armed; comment replaced when one is given) and
+        is returned with 200.
       requestBody:
         required: true
         content:
@@ -309,6 +325,11 @@ paths:
       responses:
         '201':
           description: Card created (starts a Camunda `kanban-card` process)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/KanbanCard' }
+        '200':
+          description: The ticker already had a card in that column; it was updated
           content:
             application/json:
               schema: { $ref: '#/components/schemas/KanbanCard' }
@@ -346,6 +367,11 @@ paths:
               schema: { $ref: '#/components/schemas/Error' }
         '404':
           description: Card not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          description: Moving the card to a column that already has a card for the same ticker (TICKER_EXISTS)
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -443,6 +469,7 @@ components:
       required: [ticker, quantity, avgCost, currentPrice, marketValue, unrealizedPnl, unrealizedPnlPercent]
       properties:
         ticker: { type: string }
+        name: { type: string, nullable: true, description: 'Company name, e.g. "Apple Inc." (null while unknown)' }
         quantity: { type: number }
         avgCost: { type: number }
         currentPrice: { type: number }
@@ -469,24 +496,27 @@ components:
         totalValue: { type: number }
         recordedAt: { type: string, format: date-time }
 
+    TickerSearchResult:
+      type: object
+      required: [ticker, name]
+      properties:
+        ticker: { type: string, example: ENPH }
+        name: { type: string, example: 'Enphase Energy, Inc.' }
+        exchange: { type: string, nullable: true, description: 'Primary exchange MIC, e.g. XNAS, XNYS', example: XNAS }
+        type: { type: string, nullable: true, description: 'Security type, e.g. CS (common stock), ETF, ADRC', example: CS }
+
     WatchlistAddRequest:
       type: object
       required: [ticker]
       properties:
         ticker: { type: string, example: PYPL }
 
-    CompanyName:
-      type: object
-      required: [ticker]
-      properties:
-        ticker: { type: string }
-        name: { type: string, nullable: true, description: 'Company name; null when unknown' }
-
     WatchlistItem:
       type: object
       required: [ticker, addedAt]
       properties:
         ticker: { type: string }
+        name: { type: string, nullable: true, description: 'Company name, e.g. "Enphase Energy, Inc." (null while unknown; adding a ticker waits briefly for it)' }
         price: { type: number, nullable: true, description: 'null until the first price arrives' }
         previousPrice: { type: number, nullable: true }
         sessionOpenPrice: { type: number, nullable: true, description: 'First price seen since the server started; base for daily change %' }
@@ -578,6 +608,7 @@ components:
       properties:
         id: { type: string, format: uuid }
         ticker: { type: string }
+        name: { type: string, nullable: true, description: 'Company name, e.g. "Apple Inc." (built in for common tickers, otherwise looked up once from Massive/Finnhub; null while unknown)' }
         column: { $ref: '#/components/schemas/KanbanColumn' }
         targetPrice: { type: number }
         sortOrder: { type: integer }
@@ -616,6 +647,7 @@ components:
       properties:
         id: { type: string, format: uuid }
         ticker: { type: string }
+        name: { type: string, nullable: true, description: 'Company name, e.g. "Apple Inc." (null while unknown)' }
         upperLimit: { type: number, nullable: true }
         lowerLimit: { type: number, nullable: true }
         comment: { type: string, nullable: true }

@@ -4,10 +4,9 @@ import { PricePoint } from '../../core/price-stream.service';
 import { MoneyPipe, PctPipe, PricePipe, QtyPipe, signClass } from '../../shared/format';
 import { LineChartComponent } from '../../shared/line-chart.component';
 import { PriceFlashDirective } from '../../shared/price-flash.directive';
+import { SearchBoxComponent, matchesSearch } from '../../shared/search-box.component';
 import { HeatmapComponent } from './heatmap.component';
 import { KanbanBoardComponent } from './kanban-board.component';
-import { CompanyNameService } from '../../core/company-name.service';
-import { TableSearchComponent, matchesSearch } from '../../shared/table-search.component';
 
 const LIVE_SAMPLE_MS = 2000;
 
@@ -23,7 +22,7 @@ const LIVE_SAMPLE_MS = 2000;
     PricePipe,
     QtyPipe,
     PriceFlashDirective,
-    TableSearchComponent,
+    SearchBoxComponent,
   ],
   host: { class: 'grid gap-2 grid-cols-1 xl:grid-cols-2 auto-rows-min' },
   template: `
@@ -55,11 +54,13 @@ const LIVE_SAMPLE_MS = 2000;
     <section class="panel flex max-h-[420px] flex-col overflow-hidden">
       <div class="panel-title">
         <span>Positions</span>
-        <span class="num normal-case tracking-normal">
-          Cash {{ portfolio.cash() | money }} · Invested {{ portfolio.positionsValue() | money }}
-        </span>
+        <div class="flex items-center gap-3">
+          <span class="num normal-case tracking-normal">
+            Cash {{ portfolio.cash() | money }} · Invested {{ portfolio.positionsValue() | money }}
+          </span>
+          <app-search-box [(query)]="search" testId="positions-search" />
+        </div>
       </div>
-      <app-table-search class="border-b border-edge p-2" testId="positions-search" [(query)]="query" />
       <div class="min-h-0 flex-1 overflow-auto">
         <table class="grid-table" data-testid="positions-table">
           <thead>
@@ -75,10 +76,10 @@ const LIVE_SAMPLE_MS = 2000;
             </tr>
           </thead>
           <tbody>
-            @for (p of positions(); track p.ticker) {
+            @for (p of visiblePositions(); track p.ticker) {
               <tr [attr.data-testid]="'positions-row-' + p.ticker" class="hover:bg-panel-2">
                 <td class="font-semibold">{{ p.ticker }}</td>
-                <td class="max-w-[12rem] truncate text-muted" [attr.title]="names.name(p.ticker)">{{ names.name(p.ticker) ?? '' }}</td>
+                <td class="max-w-48 truncate text-muted" [attr.title]="p.name ?? null" [attr.data-testid]="'positions-name-' + p.ticker">{{ p.name || '—' }}</td>
                 <td class="num text-right">{{ p.quantity | qty }}</td>
                 <td class="num text-right">{{ p.avgCost | price }}</td>
                 <td class="num text-right"><span class="rounded px-1" [appPriceFlash]="p.currentPrice">{{ p.currentPrice | price }}</span></td>
@@ -88,8 +89,12 @@ const LIVE_SAMPLE_MS = 2000;
               </tr>
             } @empty {
               <tr>
-                <td colspan="8" class="py-6 text-center text-muted" data-testid="positions-empty">
-                  {{ portfolio.positions().length ? 'No position matches "' + query() + '"' : 'No open positions' }}
+                <td colspan="8" class="py-6 text-center text-muted">
+                  @if (search().trim() && portfolio.positions().length > 0) {
+                    <span data-testid="positions-no-match">No positions match "{{ search() }}"</span>
+                  } @else {
+                    No open positions
+                  }
                 </td>
               </tr>
             }
@@ -110,12 +115,10 @@ const LIVE_SAMPLE_MS = 2000;
 export class PortfolioPage {
   readonly portfolio = inject(PortfolioService);
   readonly signClass = signClass;
-  readonly names = inject(CompanyNameService);
-
-  /** Full-text search on ticker and company name. */
-  readonly query = signal('');
-  readonly positions = computed(() =>
-    this.portfolio.positions().filter((p) => matchesSearch(this.query(), p.ticker, this.names.name(p.ticker))),
+  /** Search text for the positions table (ticker or company name). */
+  readonly search = signal('');
+  readonly visiblePositions = computed(() =>
+    this.portfolio.positions().filter((p) => matchesSearch(this.search(), p.ticker, p.name)),
   );
 
   /** Live total sampled every couple of seconds (appended to the snapshot history). */

@@ -1,4 +1,4 @@
-# Postgres for FinAlly (owned by the DB agent). Included by the root docker-compose.yml.
+# Postgres for Tradex (owned by the DB agent). Included by the root docker-compose.yml.
 # Schema is applied by Flyway inside the app at startup (classpath:db/migration).
 
 services:

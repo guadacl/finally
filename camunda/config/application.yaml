@@ -9,7 +9,7 @@ camunda:
   security:
     authentication:
       method: "basic"
-      # The FinAlly app talks to the APIs without credentials; the web apps still require a login.
+      # The Tradex app talks to the APIs without credentials; the web apps still require a login.
       unprotectedApi: true
     authorizations:
       enabled: false

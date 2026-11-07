@@ -15,9 +15,9 @@ import java.time.format.DateTimeFormatter;
  * Column codes are shown with their display names (Support / Resistance).
  *
  * <ul>
- *   <li>CARD_CREATED: {@code FinAlly: new Support card AAPL @ 185.00}</li>
- *   <li>CARD_DELETED: {@code FinAlly: Support card AAPL @ 185.00 deleted}</li>
- *   <li>TARGET_HIT: {@code FinAlly alert: AAPL hit Support 185.00}</li>
+ *   <li>CARD_CREATED: {@code Tradex: new Support card AAPL @ 185.00}</li>
+ *   <li>CARD_DELETED: {@code Tradex: Support card AAPL @ 185.00 deleted}</li>
+ *   <li>TARGET_HIT: {@code Tradex alert: AAPL hit Support 185.00}</li>
  * </ul>
  */
 public record NotificationEmail(String subject, String body) {
@@ -35,26 +35,26 @@ public record NotificationEmail(String subject, String body) {
 
         return switch (type) {
             case TARGET_HIT -> new NotificationEmail(
-                    "FinAlly alert: " + ticker + " hit " + label + " " + target,
+                    "Tradex alert: " + ticker + " hit " + label + " " + target,
                     ticker + " hit your " + label + " target.\n\n"
                             + details(ticker, label, rule, target, n.price(), time)
                             + footer(alertsUrl,
-                            "You receive this email because a " + label + " card on your FinAlly board reached its target price.\n"
+                            "You receive this email because a " + label + " card on your Tradex board reached its target price.\n"
                                     + "No trade was executed. The card notifies again only after the price moves back across the target."));
             case CARD_CREATED -> new NotificationEmail(
-                    "FinAlly: new " + label + " card " + ticker + " @ " + target,
-                    "You added a " + label + " card for " + ticker + " to your FinAlly board.\n\n"
+                    "Tradex: new " + label + " card " + ticker + " @ " + target,
+                    "You added a " + label + " card for " + ticker + " to your Tradex board.\n\n"
                             + details(ticker, label, rule, target, n.price(), time)
                             + footer(alertsUrl,
                             "You will get an email when the live price reaches the target (" + rule + ")."));
             case CARD_DELETED -> new NotificationEmail(
-                    "FinAlly: " + label + " card " + ticker + " @ " + target + " deleted",
-                    "You deleted the " + label + " card for " + ticker + " from your FinAlly board.\n\n"
+                    "Tradex: " + label + " card " + ticker + " @ " + target + " deleted",
+                    "You deleted the " + label + " card for " + ticker + " from your Tradex board.\n\n"
                             + details(ticker, label, rule, target, n.price(), time)
                             + footer(alertsUrl, "There will be no more alerts for this card."));
             // never emailed; kept so the switch stays exhaustive
             case CARD_MOVED -> new NotificationEmail(
-                    "FinAlly: " + ticker + " moved to " + label + " @ " + target,
+                    "Tradex: " + ticker + " moved to " + label + " @ " + target,
                     details(ticker, label, rule, target, n.price(), time) + footer(alertsUrl, ""));
         };
     }

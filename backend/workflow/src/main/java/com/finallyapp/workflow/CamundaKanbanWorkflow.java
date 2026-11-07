@@ -199,6 +199,22 @@ public class CamundaKanbanWorkflow implements KanbanWorkflow {
         }
     }
 
+    @Override
+    public void processDiscarded(long processInstanceKey) {
+        try {
+            client().newCancelInstanceCommand(processInstanceKey).requestTimeout(TIMEOUT).send()
+                    .whenComplete((r, error) -> {
+                        if (error != null) {
+                            log.debug("Could not cancel discarded instance {}: {}", processInstanceKey, error.toString());
+                        } else {
+                            log.info("Cancelled instance {} of a discarded duplicate card", processInstanceKey);
+                        }
+                    });
+        } catch (Exception e) {
+            log.debug("Could not cancel discarded instance {}: {}", processInstanceKey, e.toString());
+        }
+    }
+
     private void cancel(KanbanCardRef card, Long processInstanceKey) {
         if (processInstanceKey == null) {
             return;

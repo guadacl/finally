@@ -24,7 +24,7 @@ public class OpenRouterLlmClient implements LlmClient {
         this.mapper = mapper;
         this.client = builder.baseUrl(cfg.baseUrl())
                 .defaultHeader("Authorization", "Bearer " + (cfg.apiKey() == null ? "" : cfg.apiKey().trim()))
-                .defaultHeader("X-Title", "FinAlly")
+                .defaultHeader("X-Title", "Tradex")
                 .build();
     }
 

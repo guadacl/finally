@@ -264,9 +264,24 @@ class AppIntegrationTest {
         verify(workflow).cardMoved(any()); // the target edit only, not the comment edit
         assertThat(call("PATCH", "/api/kanban/" + id, "{\"comment\":\"" + "x".repeat(501) + "\"}").status()).isEqualTo(400);
         assertThat(call("PATCH", "/api/kanban/" + id, "{\"comment\":\"\"}").body().path("comment").isNull()).isTrue();
-        Res withNote = call("POST", "/api/kanban", "{\"ticker\":\"msft\",\"column\":\"SUPPORT\",\"targetPrice\":1,\"comment\":\"from alert\"}");
-        assertThat(withNote.body().path("comment").asText()).isEqualTo("from alert");
-        assertThat(call("DELETE", "/api/kanban/" + withNote.body().path("id").asText(), null).status()).isEqualTo(204);
+        // One card per ticker per column: adding MSFT to SUPPORT again updates the existing card (200, same id).
+        Res again = call("POST", "/api/kanban", "{\"ticker\":\"msft\",\"column\":\"SUPPORT\",\"targetPrice\":3,\"comment\":\"from alert\"}");
+        assertThat(again.status()).isEqualTo(200);
+        assertThat(again.body().path("id").asText()).isEqualTo(id.toString());
+        assertThat(again.body().path("targetPrice").decimalValue()).isEqualByComparingTo("3");
+        assertThat(again.body().path("comment").asText()).isEqualTo("from alert");
+        // without a comment the existing one is kept
+        Res keepNote = call("POST", "/api/kanban", "{\"ticker\":\"MSFT\",\"column\":\"SUPPORT\",\"targetPrice\":2}");
+        assertThat(keepNote.status()).isEqualTo(200);
+        assertThat(keepNote.body().path("comment").asText()).isEqualTo("from alert");
+        // the same ticker in the other column is a separate card; moving it onto MSFT's Support card is refused
+        Res other = call("POST", "/api/kanban", "{\"ticker\":\"msft\",\"column\":\"RESISTANCE\",\"targetPrice\":100000}");
+        assertThat(other.status()).isEqualTo(201);
+        String otherId = other.body().path("id").asText();
+        Res clash = call("PATCH", "/api/kanban/" + otherId, "{\"column\":\"SUPPORT\"}");
+        assertThat(clash.status()).isEqualTo(409);
+        assertThat(clash.body().path("error").asText()).isEqualTo("TICKER_EXISTS");
+        assertThat(call("DELETE", "/api/kanban/" + otherId, null).status()).isEqualTo(204);
         clearInvocations(workflow); // so the checks below only see the lifecycle card's deletion
 
         Res list = call("GET", "/api/kanban", null);
@@ -371,6 +386,15 @@ class AppIntegrationTest {
         String id = created.body().path("id").asText();
 
         assertThat(call("POST", "/api/alerts", "{\"ticker\":\"AAPL\",\"lowerLimit\":150}").status()).isEqualTo(201);
+        // one alert per ticker: re-adding AAPL replaces its limits (200, same alert) and keeps the comment
+        Res aapl1 = call("GET", "/api/alerts", null);
+        String aaplId = aapl1.body().get(1).path("id").asText();
+        Res replaced = call("POST", "/api/alerts", "{\"ticker\":\"aapl\",\"upperLimit\":400}");
+        assertThat(replaced.status()).isEqualTo(200);
+        assertThat(replaced.body().path("id").asText()).isEqualTo(aaplId);
+        assertThat(replaced.body().path("upperLimit").decimalValue()).isEqualByComparingTo("400");
+        assertThat(replaced.body().path("lowerLimit").isNull() || replaced.body().path("lowerLimit").isMissingNode()).isTrue();
+        assertThat(call("POST", "/api/alerts", "{\"ticker\":\"AAPL\",\"lowerLimit\":150}").status()).isEqualTo(200);
         // not on the watchlist, no limit, inverted range
         Res notWatched = call("POST", "/api/alerts", "{\"ticker\":\"ZZZZ\",\"upperLimit\":10}");
         assertThat(notWatched.status()).isEqualTo(400);
@@ -419,17 +443,17 @@ class AppIntegrationTest {
         verify(emailGateway, timeout(5000).times(3)).sendEmail(eq("demo@finally.local"), subject.capture(),
                 body.capture());
         assertThat(subject.getAllValues()).containsExactly(
-                "FinAlly: new Resistance card AAPL @ 200.00",
-                "FinAlly alert: AAPL hit Resistance 200.00",
-                "FinAlly: Resistance card AAPL @ 200.00 deleted");
+                "Tradex: new Resistance card AAPL @ 200.00",
+                "Tradex alert: AAPL hit Resistance 200.00",
+                "Tradex: Resistance card AAPL @ 200.00 deleted");
         assertThat(body.getAllValues().get(1)).contains("Current price: 200.10").contains("/alerts");
 
         org.mockito.ArgumentCaptor<String> sms = org.mockito.ArgumentCaptor.forClass(String.class);
         verify(smsGateway, timeout(5000).times(3)).sendSms(eq("+32470123456"), sms.capture());
         assertThat(sms.getAllValues()).containsExactly(
-                "FinAlly: new Resistance card AAPL @ 200.00",
-                "FinAlly: AAPL hit Resistance 200.00 (now 200.10)",
-                "FinAlly: Resistance card AAPL @ 200.00 deleted");
+                "Tradex: new Resistance card AAPL @ 200.00",
+                "Tradex: AAPL hit Resistance 200.00 (now 200.10)",
+                "Tradex: Resistance card AAPL @ 200.00 deleted");
 
         userContacts.rememberPhone("default", null);
         assertThat(userContacts.phone("default")).isEmpty();

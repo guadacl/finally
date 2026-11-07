@@ -68,4 +68,4 @@ fi
 
 docker exec "$CONTAINER" rm -f "$KC_CONFIG" >/dev/null 2>&1 || true
 echo "Done. Users set their number in the Account Console (http://localhost:${KEYCLOAK_HOST_PORT:-8180}/realms/$REALM/account)"
-echo "and log in to FinAlly again so the new phone_number claim reaches the app."
+echo "and log in to Tradex again so the new phone_number claim reaches the app."

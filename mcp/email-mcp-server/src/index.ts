@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * FinAlly notification MCP server (scaffolded with @modelcontextprotocol/create-server, then rewritten).
+ * Tradex notification MCP server (scaffolded with @modelcontextprotocol/create-server, then rewritten).
  * Tools: `send_email {to, subject, text, html?}` over SMTP (nodemailer) and `send_sms {to, text}` via a pluggable
  * SMS provider (SMS_PROVIDER, default "log": no real SMS, one log line each).
  *

@@ -67,7 +67,7 @@ class NotificationMailerTest {
         mailer(ON, DIRECT).send(hit("user-1", KanbanColumn.SUPPORT));
 
         ArgumentCaptor<String> body = ArgumentCaptor.forClass(String.class);
-        verify(gateway).sendEmail(eq("demo@finally.local"), eq("FinAlly alert: AAPL hit Support 185.00"), body.capture());
+        verify(gateway).sendEmail(eq("demo@finally.local"), eq("Tradex alert: AAPL hit Support 185.00"), body.capture());
         assertThat(body.getValue()).contains("184.97").contains("http://localhost:8000/alerts");
     }
 
@@ -84,8 +84,8 @@ class NotificationMailerTest {
         NotificationMailer m = mailer(ON, DIRECT);
         m.send(ofType(NotificationType.CARD_CREATED));
         m.send(ofType(NotificationType.CARD_DELETED));
-        verify(gateway).sendEmail(eq("demo@finally.local"), eq("FinAlly: new Support card AAPL @ 185.00"), anyString());
-        verify(gateway).sendEmail(eq("demo@finally.local"), eq("FinAlly: Support card AAPL @ 185.00 deleted"),
+        verify(gateway).sendEmail(eq("demo@finally.local"), eq("Tradex: new Support card AAPL @ 185.00"), anyString());
+        verify(gateway).sendEmail(eq("demo@finally.local"), eq("Tradex: Support card AAPL @ 185.00 deleted"),
                 anyString());
     }
 

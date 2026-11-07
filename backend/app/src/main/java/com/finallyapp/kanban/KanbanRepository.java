@@ -43,6 +43,11 @@ public class KanbanRepository {
         return cards.findByIdAndUserId(id, CurrentUser.id()).map(KanbanRepository::row);
     }
 
+    /** The current user's card for a ticker in a column (at most one). */
+    public Optional<CardRow> findByTickerAndColumn(String ticker, KanbanColumn column) {
+        return cards.findByUserIdAndTickerAndColumn(CurrentUser.id(), ticker, column.name()).map(KanbanRepository::row);
+    }
+
     /** New armed card at the end of its column. */
     public CardRow insert(String ticker, KanbanColumn column, BigDecimal target, String comment) {
         String user = CurrentUser.id();

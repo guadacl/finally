@@ -1,7 +1,7 @@
 # email-mcp-server
 
-FinAlly's email MCP server. It exposes one tool, `send_email`, and delivers the message over SMTP with
-nodemailer to any SMTP provider (SendGrid, Brevo, Mailgun, ... or the bundled Mailpit). The FinAlly app calls it
+Tradex's email MCP server. It exposes one tool, `send_email`, and delivers the message over SMTP with
+nodemailer to any SMTP provider (SendGrid, Brevo, Mailgun, ... or the bundled Mailpit). The Tradex app calls it
 as an MCP client (Java MCP SDK, Streamable HTTP) from the Camunda `email-notify` tasks when a Support / Resistance
 card is created, deleted, or hits its target price.
 
@@ -50,7 +50,7 @@ Stateless HTTP: every POST gets its own server instance, so no sessions are kept
 | `MAIL_USERNAME` / `MAIL_PASSWORD` | empty | SMTP login (sent only when a username is set) |
 | `MAIL_STARTTLS` | `false` | `true` → require STARTTLS (e.g. port 587) |
 | `MAIL_SECURE` | `true` on port 465 | implicit TLS |
-| `MAIL_FROM` | `FinAlly <alerts@finally.local>` | sender |
+| `MAIL_FROM` | `Tradex <alerts@finally.local>` | sender |
 
 ## Development
 

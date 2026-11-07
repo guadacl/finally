@@ -1,4 +1,4 @@
-# Mailpit for FinAlly (included by the root docker-compose.yml) - LOCAL DEV ONLY.
+# Mailpit for Tradex (included by the root docker-compose.yml) - LOCAL DEV ONLY.
 #
 # Catches every alert email (sent by the email-mcp service's send_email tool) instead of delivering it.
 #   Web UI (read the emails):  http://localhost:8025

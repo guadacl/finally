@@ -27,8 +27,6 @@ import com.finallyapp.chat.ChatService;
 import com.finallyapp.error.ApiException;
 import com.finallyapp.kanban.KanbanController;
 import com.finallyapp.kanban.KanbanService;
-import com.finallyapp.market.CompanyNameController;
-import com.finallyapp.market.CompanyNames;
 import com.finallyapp.market.MarketDataSource;
 import com.finallyapp.portfolio.PortfolioController;
 import com.finallyapp.portfolio.PortfolioService;
@@ -51,7 +49,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc(addFilters = false)
 @WebMvcTest(controllers = {PortfolioController.class, WatchlistController.class, KanbanController.class,
-        ChatController.class, HealthController.class, CompanyNameController.class})
+        ChatController.class, HealthController.class})
 class ControllerTest {
 
     private static final OffsetDateTime NOW = OffsetDateTime.of(2026, 11, 2, 10, 0, 0, 0, ZoneOffset.UTC);
@@ -72,22 +70,25 @@ class ControllerTest {
     @MockitoBean
     MarketDataSource source;
     @MockitoBean
-    CompanyNames names;
+    com.finallyapp.market.TickerSearchService tickerSearch;
 
     @Test
-    void companyNamesSkipInvalidTickersAndLookUpUnknownOnes() throws Exception {
-        when(names.cached(anyString())).thenReturn(java.util.Optional.empty());
-        when(names.cached("AAPL")).thenReturn(java.util.Optional.of("Apple Inc."));
-        when(names.lookup("ROKU")).thenReturn(java.util.Optional.of("Roku Inc"));
-        when(names.lookup("ZZZZ")).thenReturn(java.util.Optional.empty());
-        mvc.perform(get("/api/reference/names").param("tickers", "aapl, roku,,1BAD,ZZZZ,AAPL"))
+    void tickerSearch() throws Exception {
+        when(tickerSearch.search("enphase")).thenReturn(List.of(
+                new com.finallyapp.api.model.TickerSearchResult("ENPH", "Enphase Energy, Inc.").exchange("XNAS").type("CS")));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/tickers/search")
+                        .param("q", "enphase"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(3))
-                .andExpect(jsonPath("$[0].ticker").value("AAPL"))
-                .andExpect(jsonPath("$[0].name").value("Apple Inc."))
-                .andExpect(jsonPath("$[1].name").value("Roku Inc"))
-                .andExpect(jsonPath("$[2].ticker").value("ZZZZ"))
-                .andExpect(jsonPath("$[2].name").value(org.hamcrest.Matchers.nullValue()));
+                .andExpect(jsonPath("$[0].ticker").value("ENPH"))
+                .andExpect(jsonPath("$[0].name").value("Enphase Energy, Inc."))
+                .andExpect(jsonPath("$[0].exchange").value("XNAS"));
+
+        when(tickerSearch.search("down")).thenThrow(new com.finallyapp.error.ApiException(
+                org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE, "SEARCH_UNAVAILABLE", "unavailable"));
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/tickers/search")
+                        .param("q", "down"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.error").value("SEARCH_UNAVAILABLE"));
     }
 
     private static Portfolio emptyPortfolio() {
@@ -182,13 +183,19 @@ class ControllerTest {
     void kanbanCrud() throws Exception {
         UUID id = UUID.randomUUID();
         KanbanCard card = new KanbanCard(id, "AAPL", KanbanColumn.SUPPORT, new BigDecimal("185"), 0, true, NOW, NOW);
-        when(kanban.create(any())).thenReturn(card);
+        when(kanban.create(any())).thenReturn(new com.finallyapp.kanban.KanbanService.Upserted(card, true));
         mvc.perform(post("/api/kanban").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"ticker\":\"AAPL\",\"column\":\"SUPPORT\",\"targetPrice\":185}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(id.toString()))
                 .andExpect(jsonPath("$.column").value("SUPPORT"))
                 .andExpect(jsonPath("$.armed").value(true));
+        // the ticker already had a card in that column: it was updated -> 200
+        when(kanban.create(any())).thenReturn(new com.finallyapp.kanban.KanbanService.Upserted(card, false));
+        mvc.perform(post("/api/kanban").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"ticker\":\"AAPL\",\"column\":\"SUPPORT\",\"targetPrice\":185}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(id.toString()));
 
         mvc.perform(post("/api/kanban").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"ticker\":\"AAPL\",\"column\":\"SUPPORT\",\"targetPrice\":0}"))

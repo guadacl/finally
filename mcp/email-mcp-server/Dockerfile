@@ -1,4 +1,4 @@
-# FinAlly email MCP server: Streamable HTTP on :3001/mcp, health on :3001/health
+# Tradex email MCP server: Streamable HTTP on :3001/mcp, health on :3001/health
 FROM node:22-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./

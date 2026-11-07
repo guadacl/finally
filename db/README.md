@@ -1,4 +1,4 @@
-# FinAlly database (Postgres 16)
+# Tradex database (Postgres 16)
 
 ## How the schema is applied
 

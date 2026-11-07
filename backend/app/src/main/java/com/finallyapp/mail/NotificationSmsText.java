@@ -9,9 +9,9 @@ import java.math.RoundingMode;
 /**
  * Text of a notification SMS (at most {@link #MAX} characters, longer texts end with "…"):
  * <ul>
- *   <li>TARGET_HIT: {@code FinAlly: AAPL hit Support 185.00 (now 184.97)}</li>
- *   <li>CARD_CREATED: {@code FinAlly: new Support card AAPL @ 185.00}</li>
- *   <li>CARD_DELETED: {@code FinAlly: Support card AAPL @ 185.00 deleted}</li>
+ *   <li>TARGET_HIT: {@code Tradex: AAPL hit Support 185.00 (now 184.97)}</li>
+ *   <li>CARD_CREATED: {@code Tradex: new Support card AAPL @ 185.00}</li>
+ *   <li>CARD_DELETED: {@code Tradex: Support card AAPL @ 185.00 deleted}</li>
  * </ul>
  */
 public final class NotificationSmsText {
@@ -27,11 +27,11 @@ public final class NotificationSmsText {
         String target = money(n.targetPrice());
         NotificationType type = n.type() == null ? NotificationType.TARGET_HIT : n.type();
         String text = switch (type) {
-            case TARGET_HIT -> "FinAlly: " + ticker + " hit " + label + " " + target
+            case TARGET_HIT -> "Tradex: " + ticker + " hit " + label + " " + target
                     + (n.price() == null ? "" : " (now " + money(n.price()) + ")");
-            case CARD_CREATED -> "FinAlly: new " + label + " card " + ticker + " @ " + target;
-            case CARD_DELETED -> "FinAlly: " + label + " card " + ticker + " @ " + target + " deleted";
-            case CARD_MOVED -> "FinAlly: " + ticker + " moved to " + label + " @ " + target; // never sent
+            case CARD_CREATED -> "Tradex: new " + label + " card " + ticker + " @ " + target;
+            case CARD_DELETED -> "Tradex: " + label + " card " + ticker + " @ " + target + " deleted";
+            case CARD_MOVED -> "Tradex: " + ticker + " moved to " + label + " @ " + target; // never sent
         };
         return truncate(text);
     }
