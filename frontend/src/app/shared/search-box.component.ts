@@ -1,13 +1,24 @@
 import { ChangeDetectionStrategy, Component, ElementRef, afterNextRender, input, model, output, viewChild } from '@angular/core';
 
+/** Lower-cases and strips accents and punctuation, so "Coca-Cola" and "coca cola" compare equal (dots kept for BRK.B). */
+export function normalizeSearchText(s: string | null | undefined): string {
+  return (s ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9.]+/g, ' ')
+    .trim();
+}
+
 /**
- * True when every word of the query is found in the ticker or the company name (case-insensitive).
- * An empty query matches everything. "enph", "enphase", "energy enp" all match ENPH / Enphase Energy, Inc.
+ * True when every word of the query is found in the ticker or the company name (case-, accent- and
+ * punctuation-insensitive). An empty query matches everything. "enph", "enphase", "energy enp" all match
+ * ENPH / Enphase Energy, Inc.
  */
 export function matchesSearch(query: string | null | undefined, ticker: string, name?: string | null): boolean {
-  const words = (query ?? '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const words = normalizeSearchText(query).split(' ').filter(Boolean);
   if (words.length === 0) return true;
-  const haystack = `${ticker} ${name ?? ''}`.toLowerCase();
+  const haystack = `${normalizeSearchText(ticker)} ${normalizeSearchText(name)}`;
   return words.every((w) => haystack.includes(w));
 }
 

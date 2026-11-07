@@ -5,6 +5,7 @@ import {
   OnDestroy,
   afterNextRender,
   effect,
+  inject,
   input,
   signal,
   viewChild,
@@ -20,6 +21,20 @@ import {
   createChart,
 } from 'lightweight-charts';
 import { PricePoint } from '../core/price-stream.service';
+import { Theme, ThemeService } from '../core/theme.service';
+
+/** Axis/grid colors per UI theme. */
+function chartChrome(theme: Theme) {
+  const light = theme === 'light';
+  const edge = light ? '#d5dbe3' : '#2a3240';
+  const grid = light ? 'rgba(213, 219, 227, 0.6)' : 'rgba(42, 50, 64, 0.5)';
+  return {
+    layout: { textColor: light ? '#5f6b7a' : '#7d8794' },
+    grid: { vertLines: { color: grid }, horzLines: { color: grid } },
+    rightPriceScale: { borderColor: edge },
+    timeScale: { borderColor: edge },
+  };
+}
 
 /** Convert ms points to strictly increasing per-second chart data (last value per second wins). */
 export function toChartData(points: readonly PricePoint[]): LineData[] {
@@ -61,6 +76,7 @@ export class LineChartComponent implements OnDestroy {
   readonly emptyText = input('Waiting for data…');
   readonly showTime = input(true);
 
+  private readonly theme = inject(ThemeService).theme;
   private readonly host = viewChild.required<ElementRef<HTMLDivElement>>('host');
   private chart: IChartApi | null = null;
   private series: ISeriesApi<'Area'> | null = null;
@@ -72,20 +88,18 @@ export class LineChartComponent implements OnDestroy {
   constructor() {
     afterNextRender(() => {
       const el = this.host().nativeElement;
+      const chrome = chartChrome(this.theme());
       this.chart = createChart(el, {
         autoSize: true,
         layout: {
           background: { type: ColorType.Solid, color: 'transparent' },
-          textColor: '#7d8794',
+          textColor: chrome.layout.textColor,
           fontSize: 11,
           attributionLogo: false,
         },
-        grid: {
-          vertLines: { color: 'rgba(42, 50, 64, 0.5)' },
-          horzLines: { color: 'rgba(42, 50, 64, 0.5)' },
-        },
-        rightPriceScale: { borderColor: '#2a3240' },
-        timeScale: { borderColor: '#2a3240', timeVisible: this.showTime(), secondsVisible: true },
+        grid: chrome.grid,
+        rightPriceScale: chrome.rightPriceScale,
+        timeScale: { ...chrome.timeScale, timeVisible: this.showTime(), secondsVisible: true },
         crosshair: { mode: CrosshairMode.Normal },
       });
       this.series = this.chart.addSeries(AreaSeries, {
@@ -96,6 +110,12 @@ export class LineChartComponent implements OnDestroy {
         priceLineVisible: true,
       });
       this.ready.set(true);
+    });
+
+    effect(() => {
+      const theme = this.theme();
+      if (!this.ready() || !this.chart) return;
+      this.chart.applyOptions(chartChrome(theme));
     });
 
     effect(() => {

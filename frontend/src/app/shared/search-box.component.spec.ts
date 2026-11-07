@@ -8,6 +8,13 @@ describe('matchesSearch', () => {
     expect(matchesSearch('apple', 'ENPH', 'Enphase Energy, Inc.')).toBe(false);
   });
 
+  it('ignores accents and punctuation', () => {
+    expect(matchesSearch('coca cola', 'KO', 'The Coca-Cola Company')).toBe(true);
+    expect(matchesSearch('Coca-Cola', 'KO', 'The Coca Cola Company')).toBe(true);
+    expect(matchesSearch('nestle', 'NSRGY', 'Nestlé S.A.')).toBe(true);
+    expect(matchesSearch('brk.b', 'BRK.B', 'Berkshire Hathaway Inc.')).toBe(true);
+  });
+
   it('needs every word to match, in any order', () => {
     expect(matchesSearch('  energy   enp ', 'ENPH', 'Enphase Energy, Inc.')).toBe(true);
     expect(matchesSearch('energy apple', 'ENPH', 'Enphase Energy, Inc.')).toBe(false);

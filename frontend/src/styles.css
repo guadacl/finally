@@ -19,6 +19,19 @@
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+/* Light theme: same tokens, light values (toggled from the header, see ThemeService). */
+html[data-theme='light'] {
+  --color-bg: #f4f6f9;
+  --color-panel: #ffffff;
+  --color-panel-2: #e9edf2;
+  --color-edge: #d5dbe3;
+  --color-edge-strong: #b8c1cc;
+  --color-fg: #1b2330;
+  --color-muted: #5f6b7a;
+  --color-up: #12935c;
+  --color-down: #d63a37;
+}
+
 @layer base {
   html,
   body {
