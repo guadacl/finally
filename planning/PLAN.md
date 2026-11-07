@@ -54,6 +54,7 @@ Implemented menu: **Markets** (watchlist + chart + trade bar), **Watchlists** (m
 ### Visual Design
 
 - **Dark theme**: backgrounds around `#0d1117` or `#1a1a2e`, muted gray borders, no pure black
+- **Light mode (implemented)**: a sun/moon icon button in the header, right after the connection status (`data-testid="theme-toggle"`), flips the app between the default dark theme and a light theme (backgrounds `#f4f6f9` / white panels, gray borders, slightly darker green/red for contrast; Accent Yellow, Blue and Purple unchanged). The choice is stored per browser (`localStorage` key `finally-theme`) and applied before first paint, so a reload never flashes the other theme. Charts switch their grid/axis colors live. The Keycloak login page stays dark.
 - **Price flash animations**: brief green/red background highlight on price change, fading over ~500ms via CSS transitions
 - **Connection status indicator**: a small colored dot (green = connected, yellow = reconnecting, red = disconnected) visible in the header
 - **Professional, data-dense layout**: inspired by Bloomberg/trading terminals — every pixel earns its place
@@ -398,7 +399,7 @@ The frontend is a single-page application with a dense, terminal-inspired layout
 - **Positions table** — tabular view of all positions: ticker, quantity, avg cost, current price, unrealized P&L, % change
 - **Trade bar** — simple input area: ticker field, quantity field, buy button, sell button. Market orders, instant fill.
 - **AI chat panel** — docked/collapsible sidebar. Message input, scrolling conversation history, loading indicator while waiting for LLM response. Trade executions and watchlist changes shown inline as confirmations.
-- **Header** — portfolio total value (updating live), connection status indicator, cash balance
+- **Header** — portfolio total value (updating live), unrealized P&L, cash balance, connection status indicator, dark/light theme toggle, signed-in user and Logout
 
 ### Technical Notes
 
@@ -406,7 +407,7 @@ The frontend is a single-page application with a dense, terminal-inspired layout
 - Canvas-based charting library preferred (Lightweight Charts or Recharts) for performance
 - Price flash effect: on receiving a new price, briefly apply a CSS class with background color transition, then remove it
 - All API calls go to the same origin (`/api/*`) — no CORS configuration needed
-- Tailwind CSS for styling with a custom dark theme
+- Tailwind CSS for styling with a custom dark theme: colors are `@theme` tokens (`--color-bg`, `--color-panel`, `--color-fg`, `--color-edge`, `--color-up`, ...) in `frontend/src/styles.css`; the light theme redefines the same tokens under `html[data-theme='light']` (set by `ThemeService`), so new UI should use the tokens rather than hard-coded hex colors
 
 ---
 
